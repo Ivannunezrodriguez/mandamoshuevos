@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { OrderService, PRODUCTS, LOGISTICS_INFO, ALL_TOWNS, getDeliveryDaysForTown } from '../services/order.service';
 import { AuthService } from '../services/auth.service';
-import { ShoppingCart, CalendarCheck, ArrowRight, CreditCard, Bank, Truck, MapPin } from 'phosphor-react';
+import { DbAdapter } from '../services/db.adapter';
+import { ShoppingCart, CalendarCheck, ArrowRight, CreditCard, Bank, Truck, MapPin, Money } from 'phosphor-react';
 
 export function NewOrder() {
     const navigate = useNavigate();
@@ -11,6 +12,7 @@ export function NewOrder() {
     const [cart, setCart] = useState({});
     const [step, setStep] = useState(1); // 1: Selección, 2: Confirmación
     const [selectedTown, setSelectedTown] = useState('');
+    const [deliveryAddress, setDeliveryAddress] = useState(''); // New state for street address
     const [deliveryDate, setDeliveryDate] = useState('');
     const [availableDates, setAvailableDates] = useState([]);
     const [paymentMethod, setPaymentMethod] = useState('transfer'); // 'transfer' | 'bizum'
@@ -139,6 +141,10 @@ export function NewOrder() {
             alert('Por favor, selecciona tu población para ver los días de reparto.');
             return;
         }
+        if (!deliveryAddress) {
+            alert('Por favor, introduce tu dirección completa.');
+            return;
+        }
         if (!deliveryDate) {
             alert('Por favor, selecciona una fecha de entrega.');
             return;
@@ -156,12 +162,16 @@ export function NewOrder() {
                 };
             });
 
+            // REMOVED AUTO-UPDATE USER ADDRESS - SEPARATING CONCERNS AS REQUESTED
+
             await OrderService.createOrder({
                 userId: user.email || user.username || user.id,
                 items: orderItems,
                 deliveryDate: deliveryDate,
                 total: calculateTotal(),
-                paymentMethod: paymentMethod
+                paymentMethod: paymentMethod,
+                shippingAddress: deliveryAddress, // New field
+                shippingTown: selectedTown       // New field
             });
 
             // FIX: Usar replace: true para evitar bucles de historial y navegación limpia
@@ -207,7 +217,7 @@ export function NewOrder() {
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Tu Población <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Población de Entrega <span style={{ color: 'var(--color-error)' }}>*</span></label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !selectedTown ? '1px solid var(--color-error)' : '1px solid transparent' }}>
                         <MapPin size={24} color="var(--color-text-primary)" />
                         <select
@@ -220,6 +230,19 @@ export function NewOrder() {
                                 <option key={town} value={town} style={{ background: 'var(--color-bg-secondary)' }}>{town}</option>
                             ))}
                         </select>
+                    </div>
+                </div>
+
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Dirección de Entrega (Calle y Nº) <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !deliveryAddress ? '1px solid var(--color-error)' : '1px solid transparent' }}>
+                        <input
+                            type="text"
+                            placeholder="Ej: Calle Gran Via 12, 3ºA"
+                            value={deliveryAddress}
+                            onChange={(e) => setDeliveryAddress(e.target.value)}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--color-text-primary)', width: '100%', outline: 'none', padding: '0.25rem' }}
+                        />
                     </div>
                 </div>
 
@@ -277,6 +300,17 @@ export function NewOrder() {
                             <CreditCard size={24} color={paymentMethod === 'bizum' ? '#fbbf24' : 'currentColor'} />
                             <span style={{ fontSize: '0.9rem' }}>Bizum</span>
                         </label>
+                        <label style={{
+                            flex: 1, padding: '0.75rem',
+                            border: `1px solid ${paymentMethod === 'cash' ? 'var(--color-accent-primary)' : 'var(--color-border)'}`,
+                            borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem',
+                            background: paymentMethod === 'cash' ? 'rgba(251, 191, 36, 0.1)' : 'transparent'
+                        }}>
+                            <input type="radio" name="payment" value="cash" checked={paymentMethod === 'cash'} onChange={() => setPaymentMethod('cash')} style={{ display: 'none' }} />
+                            <Money size={24} color={paymentMethod === 'cash' ? '#fbbf24' : 'currentColor'} />
+                            <span style={{ fontSize: '0.9rem' }}>Al contado</span>
+                        </label>
                     </div>
                 </div>
 
@@ -290,9 +324,9 @@ export function NewOrder() {
                     </button>
                     <button
                         className="btn-primary"
-                        style={{ flex: 1, justifyContent: 'center', opacity: !deliveryDate ? 0.5 : 1, cursor: !deliveryDate ? 'not-allowed' : 'pointer' }}
+                        style={{ flex: 1, justifyContent: 'center', opacity: (!deliveryDate || !deliveryAddress) ? 0.5 : 1, cursor: (!deliveryDate || !deliveryAddress) ? 'not-allowed' : 'pointer' }}
                         onClick={handleCheckout}
-                        disabled={!deliveryDate}
+                        disabled={!deliveryDate || !deliveryAddress}
                     >
                         Confirmar Pedido <ArrowRight weight="bold" />
                     </button>

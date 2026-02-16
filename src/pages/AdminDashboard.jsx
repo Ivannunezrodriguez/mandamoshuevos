@@ -20,7 +20,8 @@ import {
     MagnifyingGlass,
     DownloadSimple,
     Envelope,
-    Funnel
+    Funnel,
+    Trash
 } from 'phosphor-react';
 
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +35,7 @@ export function AdminDashboard() {
     const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'inventory', 'stats', 'users'
     const [expandedOrder, setExpandedOrder] = useState(null);
     const [selectedOrders, setSelectedOrders] = useState(new Set());
+    const [errorMsg, setErrorMsg] = useState(null); // Capture errors
 
     // Filters
     const [filterText, setFilterText] = useState('');
@@ -41,9 +43,7 @@ export function AdminDashboard() {
 
     const navigate = useNavigate();
 
-    useEffect(() => {
-        checkAdminAndLoad();
-    }, []);
+
 
     const checkAdminAndLoad = async () => {
         const user = AuthService.getCurrentUser();
@@ -58,6 +58,7 @@ export function AdminDashboard() {
     const loadData = async () => {
         try {
             setLoading(true);
+            setErrorMsg(null); // Clear previous errors
             const [ordersData, inventoryData, profilesData] = await Promise.all([
                 DbAdapter.getAllOrders(),
                 DbAdapter.getInventory(),
@@ -72,10 +73,15 @@ export function AdminDashboard() {
             setUsers(profilesData);
         } catch (error) {
             console.error('Error loading admin data:', error);
+            setErrorMsg(error.message || "Error desconocido al cargar datos");
         } finally {
             setLoading(false);
         }
     };
+
+    useEffect(() => {
+        checkAdminAndLoad();
+    }, []);
 
     // --- LOGIC: ORDERS ---
 
@@ -92,7 +98,7 @@ export function AdminDashboard() {
     }, [orders, filterText, statusFilter]);
 
     const handleStatusUpdate = async (orderId, newStatus) => {
-        if (!window.confirm('¿Confirmar cambio de estado?')) return;
+        // if (!window.confirm('¿Confirmar cambio de estado?')) return;
         try {
             // LOGICA DE INVENTARIO: Si confirmamos pedido, restamos stock
             if (newStatus === 'confirmed') {
@@ -150,7 +156,7 @@ export function AdminDashboard() {
             await DbAdapter.updateUserDiscount(userId, val);
             // Actualizar estado local
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, discount_percent: val } : u));
-        } catch (e) {
+        } catch {
             alert("Error al actualizar descuento");
         }
     };
@@ -161,6 +167,17 @@ export function AdminDashboard() {
             await AdminService.generateDeliveryNote(order, profile || { full_name: order.userId, email: order.userId });
         } catch (error) {
             alert(`Error: ${error.message}`);
+        }
+    };
+
+    const handleDeleteOrder = async (orderId) => {
+        if (!window.confirm('¿ELIMINAR PEDIDO PERMANENTEMENTE? Esta acción no se puede deshacer.')) return;
+        try {
+            await DbAdapter.deleteOrder(orderId);
+            setOrders(prev => prev.filter(o => o.id !== orderId));
+            // Trigger load to refresh stats/inventory if needed, but local state update is faster
+        } catch (error) {
+            alert('Error al eliminar pedido: ' + error.message);
         }
     };
 
@@ -200,7 +217,7 @@ export function AdminDashboard() {
                 );
                 return map; // Order is preserved as map doesn't reorder
             });
-        } catch (error) {
+        } catch {
             alert('Error al actualizar stock');
         }
     };
@@ -242,15 +259,93 @@ export function AdminDashboard() {
             }
         });
 
-        return { totalRevenue, totalOrders, salesByMonth, productCounts, townCounts };
+        // REAL HEATMAP BASED ON ORDERS (Shipping Address)
+        // Overwrite townCounts with Order Shipping Data if available
+        // Reset townCounts for Order based calculation
+        const orderTownCounts = {};
+        orders.forEach(o => {
+            // HEATMAP DATA (Refined with Shipping Town)
+            if (o.shippingTown) {
+                // If we have explicit shipping town, use it
+                const town = o.shippingTown;
+                orderTownCounts[town] = (orderTownCounts[town] || 0) + 1;
+            } else {
+                // Fallback to User Address (Legacy orders)
+                const user = users.find(u => u.id === o.userId || u.email === o.userId);
+                if (user && user.address) {
+                    const addressLower = user.address.toLowerCase();
+                    let town = 'Desconocido';
+                    // ... (existing helper logic) - Optimization: Extract normalized logic if needed
+                    if (addressLower.includes('illescas')) town = 'Illescas';
+                    else if (addressLower.includes('ugena')) town = 'Ugena';
+                    else if (addressLower.includes('yuncos')) town = 'Yuncos';
+                    else if (addressLower.includes('seseña')) town = 'Seseña';
+                    else if (addressLower.includes('esquivias')) town = 'Esquivias';
+                    else if (addressLower.includes('yeles')) town = 'Yeles';
+                    else if (addressLower.includes('numancia')) town = 'Numancia';
+                    else if (addressLower.includes('cedillo')) town = 'Cedillo';
+                    else if (addressLower.includes('viso')) town = 'El Viso';
+                    else if (addressLower.includes('carranque')) town = 'Carranque';
+                    else if (addressLower.includes('casarrubuelos')) town = 'Casarrubuelos';
+                    else if (addressLower.includes('madrid')) town = 'Madrid';
+                    else town = 'Otros';
+
+                    orderTownCounts[town] = (orderTownCounts[town] || 0) + 1;
+                } else {
+                    orderTownCounts['Sin Dirección'] = (orderTownCounts['Sin Dirección'] || 0) + 1;
+                }
+            }
+        });
+
+        console.log("Heatmap Data:", orderTownCounts); // Keep this log for a moment to debug in console
+
+        // Use orderTownCounts instead of townCounts if we have orders
+        const finalTownCounts = Object.keys(orderTownCounts).length > 0 ? orderTownCounts : townCounts;
+
+        return { totalRevenue, totalOrders, salesByMonth, productCounts, townCounts: finalTownCounts };
     }, [orders, users]);
 
     if (loading) return <div style={{ color: 'white', textAlign: 'center', padding: '5rem' }}>Cargando panel...</div>;
 
     const products = OrderService.getProducts();
 
+    const pendingCount = orders.filter(o => o.status === 'pending').length;
+
     return (
         <div className="container" style={{ paddingBottom: '5rem' }}>
+            {errorMsg && (
+                <div style={{ background: '#ef4444', color: 'white', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                    <strong>Error de Carga:</strong> {errorMsg}
+                    <br />
+                    <small>Verifica las Políticas RLS en Supabase o la consola del navegador.</small>
+                </div>
+            )}
+            <style>{`
+                .order-grid-header {
+                    display: grid;
+                    grid-template-columns: 40px 1fr 1fr 2fr 1fr 150px 50px;
+                    gap: 1rem;
+                    padding: 0 1rem;
+                    font-size: 0.8rem;
+                    font-weight: bold;
+                    color: var(--color-text-secondary);
+                    margin-bottom: -1rem;
+                }
+                .order-grid-item {
+                    display: grid;
+                    grid-template-columns: 40px 1fr 1fr 2fr 1fr 150px 50px;
+                    align-items: center;
+                    gap: 1rem;
+                }
+                @media (max-width: 768px) {
+                    .order-grid-header { display: none; }
+                    .order-grid-item {
+                        grid-template-columns: 1fr;
+                        gap: 0.5rem;
+                    }
+                    .order-grid-item > input { display: none; } /* Hide checkbox on mobile for simplicity or move it */
+                }
+            `}</style>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
                 <Package size={40} className="text-gold" />
                 <div>
@@ -262,7 +357,7 @@ export function AdminDashboard() {
             {/* TABS */}
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '1rem', overflowX: 'auto' }}>
                 {[
-                    { id: 'orders', icon: Truck, label: `Pedidos (${orders.length})` },
+                    { id: 'orders', icon: Truck, label: `Pedidos`, badge: pendingCount },
                     { id: 'inventory', icon: Storefront, label: 'Inventario' },
                     { id: 'stats', icon: ChartBar, label: 'Estadísticas' },
                     { id: 'users', icon: User, label: `Usuarios (${users.length})` },
@@ -281,6 +376,18 @@ export function AdminDashboard() {
                         }}
                     >
                         <tab.icon size={20} /> {tab.label}
+                        {tab.badge > 0 && (
+                            <span style={{
+                                background: '#ef4444',
+                                color: 'white',
+                                fontSize: '0.75rem',
+                                padding: '0.1rem 0.4rem',
+                                borderRadius: '999px',
+                                marginLeft: '0.5rem'
+                            }}>
+                                {tab.badge}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -288,6 +395,17 @@ export function AdminDashboard() {
             {/* --- TAB: ORDERS --- */}
             {activeTab === 'orders' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    {/* Header Columns for List */}
+                    <div className="order-grid-header">
+                        <div></div>
+                        <div>Nº PEDIDO</div>
+                        <div>FECHA</div>
+                        <div>CLIENTE / EMAIL</div>
+                        <div>LOCALIDAD</div>
+                        <div style={{ textAlign: 'center' }}>ESTADO</div>
+                        <div></div>
+                    </div>
+
 
                     {/* Filters & Actions */}
                     <div className="glass-card" style={{ padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -339,34 +457,71 @@ export function AdminDashboard() {
 
                     {filteredOrders.map(order => (
                         <div key={order.id} className="glass-card" style={{ padding: '1rem', borderLeft: selectedOrders.has(order.id) ? '4px solid var(--color-accent-primary)' : '4px solid transparent' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedOrders.has(order.id)}
-                                        onChange={() => toggleSelectOrder(order.id)}
-                                        style={{ transform: 'scale(1.2)' }}
-                                    />
-                                    <div style={{ cursor: 'pointer' }} onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            {expandedOrder === order.id ? <CaretDown /> : <CaretRight />}
-                                            <span style={{ fontWeight: 600, color: 'var(--color-accent-primary)' }}>{order.invoiceNumber}</span>
-                                            <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', opacity: 0.7 }}>{new Date(order.createdAt).toLocaleDateString()}</span>
-                                        </div>
-                                        <div style={{ marginLeft: '1.5rem', fontSize: '0.9rem' }}>
-                                            {order.userId}
-                                        </div>
-                                    </div>
+                            <div className="order-grid-item">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedOrders.has(order.id)}
+                                    onChange={() => toggleSelectOrder(order.id)}
+                                    style={{ transform: 'scale(1.2)' }}
+                                />
+                                {/* Column 1: Invoice */}
+                                <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
+                                    {expandedOrder === order.id ? <CaretDown /> : <CaretRight />}
+                                    <span style={{ fontWeight: 600, color: 'var(--color-accent-primary)' }}>{order.invoiceNumber}</span>
                                 </div>
-                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                    <span style={{
-                                        padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold',
-                                        background: order.status === 'pending' ? 'rgba(251, 191, 36, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                                        color: order.status === 'pending' ? '#fbbf24' : '#34d399'
-                                    }}>
-                                        {order.status.toUpperCase()}
-                                    </span>
+
+                                {/* Column 2: Date */}
+                                <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                                    {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+
+                                {/* Column 3: User/Email */}
+                                <div style={{ fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={order.userId}>
+                                    {order.userId}
+                                </div>
+
+                                {/* Column 4: Locality (Explicit or Derived) */}
+                                <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
+                                    {order.shippingTown || (() => {
+                                        const u = users.find(user => user.id === order.userId || user.email === order.userId);
+                                        if (!u || !u.address) return '-';
+                                        const addr = u.address.toLowerCase();
+                                        if (addr.includes('illescas')) return 'Illescas';
+                                        if (addr.includes('ugena')) return 'Ugena';
+                                        if (addr.includes('yuncos')) return 'Yuncos';
+                                        if (addr.includes('seseña')) return 'Seseña';
+                                        if (addr.includes('esquivias')) return 'Esquivias';
+                                        if (addr.includes('yeles')) return 'Yeles';
+                                        if (addr.includes('numancia')) return 'Numancia';
+                                        if (addr.includes('cedillo')) return 'Cedillo';
+                                        if (addr.includes('viso')) return 'El Viso';
+                                        if (addr.includes('carranque')) return 'Carranque';
+                                        if (addr.includes('casarrubuelos')) return 'Casarrubuelos';
+                                        if (addr.includes('madrid')) return 'Madrid';
+                                        return 'Otro';
+                                    })()}
+                                </div>
+
+                                {/* Status */}
+                                <span style={{
+                                    padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 'bold', textAlign: 'center',
+                                    background: order.status === 'pending' ? 'rgba(249, 115, 22, 0.2)' :
+                                        order.status === 'confirmed' ? 'rgba(59, 130, 246, 0.2)' : // BLUE
+                                            'rgba(16, 185, 129, 0.2)', // GREEN
+                                    color: order.status === 'pending' ? '#ea580c' :
+                                        order.status === 'confirmed' ? '#3b82f6' :
+                                            '#34d399'
+                                }}>
+                                    {order.status === 'pending' ? 'Pendiente' :
+                                        order.status === 'confirmed' ? 'Confirmado' :
+                                            order.status === 'delivered' ? 'Entregado' :
+                                                order.status}
+                                </span>
+
+                                {/* Actions */}
+                                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                     <button onClick={() => handleDownloadPDF(order)} style={{ background: 'transparent', color: '#3b82f6' }} title="Albarán PDF"><FilePdf size={24} /></button>
+                                    <button onClick={() => handleDeleteOrder(order.id)} style={{ background: 'transparent', color: '#ef4444' }} title="Eliminar"><Trash size={24} /></button>
                                 </div>
                             </div>
 
@@ -385,6 +540,9 @@ export function AdminDashboard() {
                                     })}
                                     <div style={{ marginTop: '0.5rem', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-accent-primary)' }}>
                                         Total: {order.total.toFixed(2)} €
+                                    </div>
+                                    <div style={{ marginTop: '0.25rem', textAlign: 'right', fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
+                                        Pago: {order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado'}
                                     </div>
                                     {order.status === 'pending' && (
                                         <div style={{ marginTop: '1rem' }}>
@@ -477,8 +635,17 @@ export function AdminDashboard() {
                                             background: 'var(--color-accent-primary)',
                                             height: `${Math.min((value / (stats.totalRevenue || 1)) * 300, 150)}px`,
                                             borderRadius: '4px 4px 0 0',
-                                            transition: 'height 0.3s'
-                                        }}></div>
+                                            transition: 'height 0.3s',
+                                            position: 'relative'
+                                        }}>
+                                            <span style={{
+                                                position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)',
+                                                fontSize: '0.75rem', fontWeight: 'bold', color: 'white',
+                                                background: 'rgba(0,0,0,0.5)', padding: '2px 4px', borderRadius: '4px'
+                                            }}>
+                                                {value}€
+                                            </span>
+                                        </div>
                                         <div style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>{month}</div>
                                     </div>
                                 ))}
@@ -503,71 +670,99 @@ export function AdminDashboard() {
                                 );
                             })}
                         </div>
+
+                        {/* Heatmap (Top Cities) */}
+                        <div className="glass-card" style={{ padding: '1.5rem' }}>
+                            <h3>Mapa de Calor (Ciudades)</h3>
+                            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>Lugares con mayor volumen de pedidos</p>
+                            {Object.entries(stats.townCounts)
+                                .sort(([, a], [, b]) => b - a)
+                                .map(([town, count], idx) => (
+                                    <div key={town} style={{ marginBottom: '0.8rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: '0.2rem' }}>
+                                            <span>{idx + 1}. {town}</span>
+                                            <span style={{ fontWeight: 'bold' }}>{count}</span>
+                                        </div>
+                                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px' }}>
+                                            <div style={{
+                                                height: '100%',
+                                                width: `${Math.min((count / stats.totalOrders) * 100 * 2, 100)}%`, // Scale visually
+                                                background: idx === 0 ? '#ef4444' : idx === 1 ? '#f97316' : '#3b82f6', // Red for #1, Orange #2, Blue rest
+                                                borderRadius: '3px'
+                                            }}></div>
+                                        </div>
+                                    </div>
+                                ))
+                            }
+                        </div>
                     </div>
-                </div>
-            )}
+                </div >
+            )
+            }
 
             {/* --- TAB: USERS --- */}
-            {activeTab === 'users' && (
-                <div className="glass-card">
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--color-border)' }}>
-                                <th style={{ padding: '1rem' }}>Usuario</th>
-                                <th style={{ padding: '1rem' }}>Contacto</th>
-                                <th style={{ padding: '1rem' }}>Descuento General</th>
-                                <th style={{ padding: '1rem' }}>Rol</th>
-                                <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {users.map(u => (
-                                <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                                    <td style={{ padding: '1rem' }}>
-                                        <strong>{u.full_name || 'Sin Nombre'}</strong>
-                                        <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Unido: {new Date(u.updated_at || Date.now()).toLocaleDateString()}</div>
-                                    </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <div>{u.email}</div>
-                                        <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>{u.phone || 'Sin télefono'}</div>
-                                    </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                defaultValue={u.discount_percent || 0}
-                                                onBlur={(e) => handleUpdateDiscount(u.id, e.target.value)}
-                                                style={{ width: '60px', padding: '0.25rem', borderRadius: '4px', border: '1px solid var(--color-border)', background: '#374151', color: 'white', textAlign: 'center' }}
-                                            />
-                                            <span>%</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '1rem' }}>
-                                        <span style={{
-                                            padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem',
-                                            background: u.role === 'admin' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.1)',
-                                            color: u.role === 'admin' ? '#ec4899' : 'var(--color-text-secondary)'
-                                        }}>
-                                            {u.role ? u.role.toUpperCase() : 'USER'}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                        <a
-                                            href={`mailto:${u.email}?subject=Oferta Especial Mandahuevos&body=Hola ${u.full_name || ''}, tienes un descuento especial del ${u.discount_percent || 0}% en tu próxima compra...`}
-                                            className="btn-primary"
-                                            style={{ textDecoration: 'none', fontSize: '0.9rem', padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-                                        >
-                                            <Envelope size={18} /> Contactar
-                                        </a>
-                                    </td>
+            {
+                activeTab === 'users' && (
+                    <div className="glass-card">
+                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                                <tr style={{ textAlign: 'left', borderBottom: '2px solid var(--color-border)' }}>
+                                    <th style={{ padding: '1rem' }}>Usuario</th>
+                                    <th style={{ padding: '1rem' }}>Contacto</th>
+                                    <th style={{ padding: '1rem' }}>Descuento General</th>
+                                    <th style={{ padding: '1rem' }}>Rol</th>
+                                    <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
+                            </thead>
+                            <tbody>
+                                {users.map(u => (
+                                    <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                        <td style={{ padding: '1rem' }}>
+                                            <strong>{u.full_name || 'Sin Nombre'}</strong>
+                                            <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Unido: {new Date(u.updated_at || Date.now()).toLocaleDateString()}</div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div>{u.email}</div>
+                                            <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>{u.phone || 'Sin télefono'}</div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    defaultValue={u.discount_percent || 0}
+                                                    onBlur={(e) => handleUpdateDiscount(u.id, e.target.value)}
+                                                    style={{ width: '60px', padding: '0.25rem', borderRadius: '4px', border: '1px solid var(--color-border)', background: '#374151', color: 'white', textAlign: 'center' }}
+                                                />
+                                                <span>%</span>
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <span style={{
+                                                padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem',
+                                                background: u.role === 'admin' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255,255,255,0.1)',
+                                                color: u.role === 'admin' ? '#ec4899' : 'var(--color-text-secondary)'
+                                            }}>
+                                                {u.role === 'admin' ? 'ADMINISTRADOR' : 'USUARIO'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                            <a
+                                                href={`mailto:${u.email}?subject=Oferta Especial Mandahuevos&body=Hola ${u.full_name || ''}, tienes un descuento especial del ${u.discount_percent || 0}% en tu próxima compra...`}
+                                                className="btn-primary"
+                                                style={{ textDecoration: 'none', fontSize: '0.9rem', padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                                            >
+                                                <Envelope size={18} /> Contactar
+                                            </a>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )
+            }
+        </div >
     );
 }

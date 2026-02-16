@@ -91,7 +91,7 @@ export function Home() {
                         color: 'var(--color-text-muted)',
                         fontStyle: 'italic'
                     }}>
-                        ¡Gracias por confiar en la calidad de mandahuevos.com!
+                        ¡Gracias por confiar en la calidad de MandamosHuevos!
                     </div>
                 </div>
             </div>

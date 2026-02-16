@@ -33,7 +33,7 @@ const POSTS_POOL = [
             <h3>Ingredientes</h3>
             <ul>
                 <li>4 Patatas medianas (tipo Monalisa o Kennebec)</li>
-                <li>6 Huevos L de Mandahuevos (frescos)</li>
+                <li>6 Huevos L de MandamosHuevos (frescos)</li>
                 <li>1 Cebolla mediana (¡Sí, con cebolla!)</li>
                 <li>Aceite de Oliva Virgen Extra</li>
                 <li>Sal al gusto</li>
@@ -56,7 +56,7 @@ const POSTS_POOL = [
                 <li><strong>0 - Producción Ecológica:</strong> Gallinas al aire libre con alimentación bio.</li>
                 <li><strong>1 - Camperas:</strong> Gallinas con acceso al aire libre.</li>
                 <li><strong>2 - Suelo:</strong> Gallinas en naves cerradas pero sueltas.</li>
-                <li><strong>3 - Jaulas:</strong> Sistema que en Mandahuevos NO utilizamos.</li>
+                <li><strong>3 - Jaulas:</strong> Sistema que en MandamosHuevos NO utilizamos.</li>
             </ul>
         `
     },
@@ -153,7 +153,7 @@ export function Blog() {
     return (
         <div>
             <h2 style={{ marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Article /> Blog de Mandahuevos
+                <Article /> Blog de MandamosHuevos
             </h2>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '2rem' }}>

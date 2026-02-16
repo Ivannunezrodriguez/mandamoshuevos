@@ -103,7 +103,7 @@ export function Register() {
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <UserPlus size={48} weight="duotone" color="#fbbf24" style={{ marginBottom: '1rem' }} />
                     <h2>Crear Cuenta Profesional</h2>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>Únete a Mandahuevos para gestionar tus pedidos</p>
+                    <p style={{ color: 'var(--color-text-secondary)' }}>Únete a MandamosHuevos para gestionar tus pedidos</p>
                 </div>
 
                 <form onSubmit={handleRegister} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

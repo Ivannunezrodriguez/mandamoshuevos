@@ -144,7 +144,8 @@ export const DbAdapter = {
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
-                .order('updated_at', { ascending: false, nullsFirst: false }); // Ordenar por actualización (única fecha disponible)
+                .order('full_name', { ascending: true }); // Fallback to name sort as updated_at might be missing
+            // .order('updated_at', { ascending: false, nullsFirst: false }); 
             if (error) {
                 console.error("Error fetching profiles:", error);
                 return [];
@@ -214,13 +215,13 @@ export const DbAdapter = {
 
     updateUserDiscount: async (userId, discountPercent) => {
         if (isSupabaseConfigured()) {
-            const { data, error } = await supabase
+            const { data, error: updateError } = await supabase
                 .from('profiles')
                 .update({ discount_percent: discountPercent })
                 .eq('id', userId)
                 .select()
                 .single();
-            if (error) throw error;
+            if (updateError) throw updateError;
             return data;
         } else {
             // Local mode support
@@ -247,7 +248,9 @@ export const DbAdapter = {
                     delivery_date: orderData.deliveryDate,
                     payment_method: orderData.paymentMethod,
                     status: 'pending',
-                    invoice_number: orderData.invoiceNumber || `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}` // Fallback generador básico
+                    invoice_number: orderData.invoiceNumber || `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`, // Fallback generador básico
+                    shipping_address: orderData.shippingAddress, // NEW: Shipping Logic
+                    shipping_town: orderData.shippingTown       // NEW: Shipping Logic
                 }])
                 .select()
                 .single();
@@ -277,7 +280,7 @@ export const DbAdapter = {
                 createdAt: new Date().toISOString(),
                 status: 'pending',
                 invoiceNumber: `INV-${new Date().getFullYear()}-${(orders.length + 1).toString().padStart(4, '0')}`,
-                ...orderData
+                ...orderData // This already spreads shippingAddress and shippingTown
             };
             orders.push(newOrder);
             localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
@@ -291,6 +294,7 @@ export const DbAdapter = {
                 .from('orders')
                 .select(`
                     id, created_at, total, status, delivery_date, payment_method, invoice_number,
+                    shipping_address, shipping_town,
                     order_items ( product_id, quantity, price_at_purchase )
                 `)
                 .eq('user_id_ref', userId)
@@ -306,9 +310,11 @@ export const DbAdapter = {
                 deliveryDate: o.delivery_date,
                 paymentMethod: o.payment_method,
                 invoiceNumber: o.invoice_number || `INV-${new Date(o.created_at).getFullYear()}-${o.id.slice(0, 4)}`,
+                shippingAddress: o.shipping_address,
+                shippingTown: o.shipping_town,
                 items: o.order_items.map(i => ({
                     id: i.product_id,
-                    name: `Producto ${i.product_id}`,
+                    name: `Producto ${i.product_id}`, // Mejorar si products disponibles
                     price: i.price_at_purchase,
                     quantity: i.quantity
                 }))
@@ -321,7 +327,7 @@ export const DbAdapter = {
     },
 
     // Método auxiliar para lógica de sugerencias
-    getRecurringSuggestion: async (username) => {
+    getRecurringSuggestion: async () => {
         // ... Logica simple o compleja, por ahora simplificada ...
         return null;
     },
@@ -354,6 +360,7 @@ export const DbAdapter = {
                 .from('orders')
                 .select(`
                     id, created_at, total, status, delivery_date, payment_method, invoice_number, user_id_ref,
+                    shipping_address, shipping_town,
                     order_items ( product_id, quantity, price_at_purchase )
                 `)
                 .order('created_at', { ascending: false });
@@ -369,6 +376,8 @@ export const DbAdapter = {
                 deliveryDate: o.delivery_date,
                 paymentMethod: o.payment_method,
                 invoiceNumber: o.invoice_number,
+                shippingAddress: o.shipping_address,
+                shippingTown: o.shipping_town,
                 items: o.order_items.map(i => ({
                     id: i.product_id,
                     price: i.price_at_purchase,
@@ -400,6 +409,49 @@ export const DbAdapter = {
                 return orders[index];
             }
             return null;
+        }
+    },
+
+    // Eliminar Pedido (Admin)
+    deleteOrder: async (orderId) => {
+        if (isSupabaseConfigured()) {
+            // Eliminar items primero (cascade debería encargarse, pero por seguridad)
+            const { error: itemsError } = await supabase
+                .from('order_items')
+                .delete()
+                .eq('order_id', orderId);
+
+            if (itemsError) console.warn("Error borrando items:", itemsError);
+
+            const { error } = await supabase
+                .from('orders')
+                .delete()
+                .eq('id', orderId);
+
+            if (error) throw error;
+            return true;
+        } else {
+            const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+            const updatedOrders = orders.filter(o => o.id !== orderId);
+            localStorage.setItem(ORDERS_KEY, JSON.stringify(updatedOrders));
+            return true;
+        }
+    },
+
+    getPendingOrdersCount: async () => {
+        if (isSupabaseConfigured()) {
+            const { count, error } = await supabase
+                .from('orders')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'pending');
+            if (error) {
+                console.warn("Error counting pending orders:", error);
+                return 0;
+            }
+            return count;
+        } else {
+            const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+            return orders.filter(o => o.status === 'pending').length;
         }
     },
 

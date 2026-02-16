@@ -124,18 +124,31 @@ export function History() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                             <div className="text-gold" style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>
                                                 {order.total.toFixed(2)} €
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', fontWeight: 'normal', marginLeft: '0.5rem' }}>
+                                                    ({order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado'})
+                                                </span>
                                             </div>
+                                            {order.shippingTown && (
+                                                <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                    📍 {order.shippingTown}
+                                                </span>
+                                            )}
                                             <span style={{
                                                 padding: '0.25rem 0.75rem',
                                                 borderRadius: 'var(--radius-full)',
-                                                background: 'rgba(16, 185, 129, 0.2)',
-                                                color: '#34d399',
-                                                fontSize: '0.875rem'
+                                                background: order.status === 'pending' ? 'rgba(249, 115, 22, 0.2)' :
+                                                    order.status === 'confirmed' ? 'rgba(59, 130, 246, 0.2)' : // BLUE
+                                                        'rgba(16, 185, 129, 0.2)', // GREEN
+                                                color: order.status === 'pending' ? '#ea580c' :
+                                                    order.status === 'confirmed' ? '#3b82f6' :
+                                                        '#34d399',
+                                                fontSize: '0.875rem',
+                                                fontWeight: 600
                                             }}>
                                                 {order.status === 'pending' ? 'Pendiente' :
                                                     order.status === 'confirmed' ? 'Confirmado' :
-                                                        order.status === 'shipped' ? 'Enviado' :
-                                                            order.status === 'delivered' ? 'Entregado' : order.status}
+                                                        order.status === 'delivered' ? 'Entregado' :
+                                                            order.status}
                                             </span>
                                         </div>
                                     </div>

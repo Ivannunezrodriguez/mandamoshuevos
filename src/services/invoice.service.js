@@ -9,85 +9,147 @@ export const InvoiceService = {
         // Configuración
         const pageWidth = doc.internal.pageSize.width;
         const margin = 20;
+        const centerX = pageWidth / 2;
 
-        // Header (Logo y Empresa)
+        // --- CABECERA ---
+        // Fondo oscuro
+        doc.setFillColor(23, 23, 23);
+        doc.rect(0, 0, 210, 45, 'F');
+
+        // Título Principal (Centrado)
+        doc.setTextColor(255, 255, 255);
         doc.setFontSize(22);
-        doc.setTextColor(251, 191, 36); // #fbbf24 Gold
-        doc.text('MANDAHUEVOS.COM', margin, 20);
+        doc.text('mandamoshuevos', centerX, 15, { align: 'center' });
+
+
+
+        // Datos de la Empresa (Centrado)
+        doc.setFontSize(8);
+        doc.setTextColor(200, 200, 200);
+        doc.text('CIF: B01782853', centerX, 30, { align: 'center' });
+        doc.text('ventas@mandamoshuevos.com | +34 691 562 824', centerX, 35, { align: 'center' });
+        "doc.text('www.mandamoshuevos.com', centerX, 40, { align: 'center' });"
+        // Etiqueta "FACTURA" (Esquina superior derecha)
+        doc.setFontSize(14);
+        doc.setTextColor(251, 191, 36); // Color amarillo corporativo
+        doc.text('FACTURA', 190, 15, { align: 'right' });
+
+
+        // --- CUERPO DEL DOCUMENTO (2 COLUMNAS) ---
+        doc.setTextColor(0, 0, 0);
+        const contentStartY = 60;
+
+        // COLUMNA IZQUIERDA: FACTURAR A (CLIENTE)
+        // Alineado al margen izquierdo (20)
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('FACTURAR A:', margin, contentStartY);
+        doc.setFont(undefined, 'normal');
 
         doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text('Venta de Huevos al Por Mayor', margin, 26);
-        doc.text('Polígono Industrial El Huevo, Nave 3', margin, 31);
-        doc.text('28000 Madrid, España', margin, 36);
-        doc.text('CIF: B-12345678', margin, 41);
-        doc.text('Tel: +34 912 345 678', margin, 46);
-        doc.text('Email: facturas@mandahuevos.com', margin, 51);
+        const customerName = user.full_name || user.name || user.email || 'Cliente';
+        const customerAddress = order.shippingAddress || user.address || 'No especificada';
+        const customerTown = order.shippingTown || (order.deliveryDate ? 'Entrega Programada' : '');
+        const customerPhone = user.phone || 'No especificado';
+        const customerDni = user.dni || user.nif || '';
 
-        // Datos del Cliente
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text('FACTURAR A:', margin, 70);
+        let yPos = contentStartY + 10;
+        const lineHeight = 5;
+
+        doc.text(`Nombre: ${customerName}`, margin, yPos); yPos += lineHeight;
+        if (customerDni) { doc.text(`DNI/CIF: ${customerDni}`, margin, yPos); yPos += lineHeight; }
+        doc.text(`Dirección: ${customerAddress}`, margin, yPos); yPos += lineHeight;
+        if (customerTown) { doc.text(`Localidad: ${customerTown}`, margin, yPos); yPos += lineHeight; }
+        doc.text(`Tel: ${customerPhone}`, margin, yPos);
+
+
+        // COLUMNA DERECHA: DATOS FACTURA
+        // Alineado a la derecha, pero con estructura tabular
+        // Labels en x=120, Valores en x=190 (Right Align)
+        const labelX = 120;
+        const valueX = 190;
 
         doc.setFontSize(11);
-        doc.text(user.name || 'Cliente', margin, 78);
-        doc.text(`DNI/CIF: ${user.dni || 'No especificado'}`, margin, 84);
-        doc.text(`Dirección: ${user.address || 'No especificada'}`, margin, 90);
-        doc.text(`Teléfono: ${user.phone || 'No especificado'}`, margin, 96);
+        doc.setFont(undefined, 'bold');
+        doc.text('DATOS FACTURA', labelX, contentStartY);
+        doc.setFont(undefined, 'normal');
 
-        // Datos de la Factura
+        doc.setFontSize(10);
+        yPos = contentStartY + 10;
         const date = new Date(order.createdAt).toLocaleDateString();
-        doc.text(`Nº Factura: ${order.invoiceNumber}`, pageWidth - margin - 60, 78);
-        doc.text(`Fecha: ${date}`, pageWidth - margin - 60, 84);
-        doc.text(`Vencimiento: Contado`, pageWidth - margin - 60, 90);
 
-        // Tabla de Productos
-        const tableColumn = ["Producto", "Cantidad", "Precio Unit.", "Total"];
-        const tableRows = [];
+        // Fila 1: Nº Factura
+        doc.text('Nº Factura:', labelX, yPos);
+        doc.text(order.invoiceNumber, valueX, yPos, { align: 'right' });
+        yPos += lineHeight;
 
-        order.items.forEach(item => {
-            const itemData = [
-                item.name,
-                item.quantity,
-                `${item.price.toFixed(2)} €`,
-                `${(item.quantity * item.price).toFixed(2)} €`
-            ];
-            tableRows.push(itemData);
-        });
+        // Fila 2: Fecha
+        doc.text('Fecha:', labelX, yPos);
+        doc.text(date, valueX, yPos, { align: 'right' });
+        yPos += lineHeight;
+
+        // Fila 3: Método Pago
+        doc.text('Método Pago:', labelX, yPos);
+        doc.text(order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado', valueX, yPos, { align: 'right' });
+
+
+        // --- TABLA PRODUCTOS ---
+        const tableColumn = ["Producto", "Cant.", "Precio Un.", "Total"];
+        const tableRows = order.items.map(item => [
+            item.name || `Producto ${item.id}`,
+            item.quantity,
+            `${item.price.toFixed(2)} €`,
+            `${(item.quantity * item.price).toFixed(2)} €`
+        ]);
 
         autoTable(doc, {
-            startY: 110,
+            startY: 105,
             head: [tableColumn],
             body: tableRows,
             theme: 'striped',
-            headStyles: { fillColor: [251, 191, 36], textColor: [0, 0, 0] },
+            headStyles: {
+                fillColor: [251, 191, 36],
+                textColor: [0, 0, 0],
+                fontStyle: 'bold'
+            },
             styles: { fontSize: 10 },
+            alternateRowStyles: { fillColor: [249, 250, 251] }
         });
 
-        // Totales
+        // --- TOTALES ---
         const finalY = doc.lastAutoTable.finalY + 10;
 
-        doc.text(`Subtotal:`, pageWidth - margin - 50, finalY);
-        doc.text(`${order.total.toFixed(2)} €`, pageWidth - margin - 15, finalY, { align: 'right' });
+        const ivaRate = 0.10;
+        const totalAmount = order.total;
+        const taxBase = totalAmount / (1 + ivaRate);
+        const taxAmount = totalAmount - taxBase;
 
-        const iva = order.total * 0.10; // IVA 10% alimentación (Huevos) - wait, huevos reducidos? 4%? 10%? Asumimos 10%
-        doc.text(`IVA (10%):`, pageWidth - margin - 50, finalY + 6);
-        doc.text(`${iva.toFixed(2)} €`, pageWidth - margin - 15, finalY + 6, { align: 'right' });
+        // Totales tabulados a la derecha
+        const totalLabelX = 140;
+        const totalValueX = 190;
+
+        doc.setFontSize(10);
+        doc.text(`Base Imponible:`, totalLabelX, finalY);
+        doc.text(`${taxBase.toFixed(2)} €`, totalValueX, finalY, { align: 'right' });
+
+        doc.text(`IVA (10%):`, totalLabelX, finalY + 6);
+        doc.text(`${taxAmount.toFixed(2)} €`, totalValueX, finalY + 6, { align: 'right' });
 
         doc.setFontSize(14);
         doc.setFont(undefined, 'bold');
-        doc.text(`TOTAL:`, pageWidth - margin - 70, finalY + 14);
-        doc.text(`${(order.total + iva).toFixed(2)} €`, pageWidth - margin - 15, finalY + 14, { align: 'right' });
+        doc.text(`TOTAL:`, totalLabelX, finalY + 14);
+        doc.text(`${totalAmount.toFixed(2)} €`, totalValueX, finalY + 14, { align: 'right' });
 
-        // Pie de página legal
+        // --- PIE DE PÁGINA ---
         doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
         doc.setTextColor(150);
-        const footerText = "De conformidad con el Reglamento General de Protección de Datos (RGPD), le informamos que sus datos forman parte de un fichero responsabilidad de MANDAHUEVOS S.L. para la gestión administrativa y contable. Puede ejercer sus derechos de acceso, rectificación, cancelación y oposición.";
-        const splitFooter = doc.splitTextToSize(footerText, pageWidth - (margin * 2));
-        doc.text(splitFooter, margin, 270);
+        doc.text('Gracias por su confianza.', margin, finalY + 30);
 
-        // Guardar
+        const footerText = "mandamoshuevos | ventas@mandamoshuevos.com | +34 691 562 824";
+        const splitFooter = doc.splitTextToSize(footerText, pageWidth - (margin * 2));
+        doc.text(splitFooter, centerX, 280, { align: 'center' });
+
         doc.save(`factura_${order.invoiceNumber}.pdf`);
     }
 };

@@ -17,32 +17,74 @@ export const AdminService = {
         const doc = new jsPDF();
         const primaryColor = [251, 191, 36]; // #fbbf24
 
-        // Cabecera
+        // Cabecera (Centrada)
+        const pageWidth = doc.internal.pageSize.width;
+        const centerX = pageWidth / 2;
+
         doc.setFillColor(23, 23, 23);
-        doc.rect(0, 0, 210, 40, 'F');
+        doc.rect(0, 0, 210, 45, 'F');
+
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(22);
-        doc.text('Mandahuevos.com', 20, 25);
+        doc.text('mandamoshuevos', centerX, 15, { align: 'center' });
 
-        doc.setFontSize(10);
-        doc.text('ALBARÁN DE ENTREGA', 160, 25);
+        doc.setFontSize(8);
+        doc.setTextColor(200, 200, 200);
+        doc.text('CIF: B01782853', centerX, 30, { align: 'center' });
 
-        // Info Cliente
+        doc.text('ventas@mandamoshuevos.com | +34 691 562 824', centerX, 35, { align: 'center' });
+        "doc.text('www.mandamoshuevos.com', centerX, 40, { align: 'center' });"
+
+        // Título Documento
+        doc.setFontSize(14);
+        doc.setTextColor(251, 191, 36);
+        doc.text('ALBARÁN', 190, 15, { align: 'right' });
+
+        // Info Cliente (Columna Izquierda)
         doc.setTextColor(0, 0, 0);
-        doc.setFontSize(12);
-        doc.text('DATOS DEL CLIENTE', 20, 55);
-        doc.setFontSize(10);
-        doc.text(`Nombre: ${userProfile?.full_name || order.userId}`, 20, 65);
-        doc.text(`Dirección: ${userProfile?.address || 'No especificada'}`, 20, 72);
-        doc.text(`Población: ${order.deliveryDate ? 'Cita programada' : 'N/A'}`, 20, 79);
-        doc.text(`Teléfono: ${userProfile?.phone || 'N/A'}`, 20, 86);
+        const contentStartY = 60;
+        const margin = 20;
 
-        // Info Pedido
-        doc.text('DATOS DEL PEDIDO', 120, 55);
-        doc.text(`Nº Albarán: ${order.invoiceNumber}`, 120, 65);
-        doc.text(`Fecha Pedido: ${new Date(order.createdAt).toLocaleDateString()}`, 120, 72);
-        doc.text(`Entrega: ${new Date(order.deliveryDate).toLocaleDateString()}`, 120, 79);
-        doc.text(`Pago: ${order.paymentMethod === 'transfer' ? 'Transferencia' : 'Bizum'}`, 120, 86);
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('DATOS DEL CLIENTE', margin, contentStartY);
+        doc.setFont(undefined, 'normal');
+
+        doc.setFontSize(10);
+        let yPos = contentStartY + 10;
+        const lineHeight = 5;
+
+        doc.text(`Nombre: ${userProfile?.full_name || order.userId}`, margin, yPos); yPos += lineHeight;
+        doc.text(`Dirección: ${order.shippingAddress || userProfile?.address || 'No especificada'}`, margin, yPos); yPos += lineHeight;
+        doc.text(`Población: ${order.shippingTown || (order.deliveryDate ? 'Entrega Programada' : 'N/A')}`, margin, yPos); yPos += lineHeight;
+        doc.text(`Teléfono: ${userProfile?.phone || 'N/A'}`, margin, yPos);
+
+        // Info Pedido (Columna Derecha - Tabulada)
+        const labelX = 120;
+        const valueX = 190;
+
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text('DATOS DEL PEDIDO', labelX, contentStartY);
+        doc.setFont(undefined, 'normal');
+
+        doc.setFontSize(10);
+        yPos = contentStartY + 10;
+
+        doc.text('Nº Albarán:', labelX, yPos);
+        doc.text(order.invoiceNumber || '---', valueX, yPos, { align: 'right' });
+        yPos += lineHeight;
+
+        doc.text('Fecha Pedido:', labelX, yPos);
+        doc.text(new Date(order.createdAt).toLocaleDateString(), valueX, yPos, { align: 'right' });
+        yPos += lineHeight;
+
+        doc.text('Entrega:', labelX, yPos);
+        doc.text(new Date(order.deliveryDate).toLocaleDateString(), valueX, yPos, { align: 'right' });
+        yPos += lineHeight;
+
+        doc.text('Pago:', labelX, yPos);
+        doc.text(order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado', valueX, yPos, { align: 'right' });
 
         // Tabla de Productos
         const products = OrderService.getProducts();
@@ -71,8 +113,13 @@ export const AdminService = {
 
         // Pie
         doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150);
-        doc.text('Gracias por confiar en Mandahuevos.com - Los huevos más frescos del corral a tu mesa.', 105, 280, null, null, 'center');
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(150);
+        doc.text('Gracias por su confianza.', margin, finalY + 30);
+
+        const footerText = "mandamoshuevos | ventas@mandamoshuevos.com | +34 691 562 824";
+        const splitFooter = doc.splitTextToSize(footerText, pageWidth - (margin * 2));
+        doc.text(splitFooter, centerX, 280, { align: 'center' });
 
         doc.save(`albaran_${order.invoiceNumber}.pdf`);
     },
@@ -106,31 +153,76 @@ export const AdminService = {
             // --- RENDER PAGE LOGIC (DUPLICATED FROM SIMPLER METHOD FOR ROBUSTNESS HERE) ---
             const primaryColor = [251, 191, 36]; // #fbbf24
 
-            // Cabecera
+            // Cabecera (Centrada)
+            const pageWidth = doc.internal.pageSize.width;
+            const centerX = pageWidth / 2;
+
             doc.setFillColor(23, 23, 23);
-            doc.rect(0, 0, 210, 40, 'F');
+            doc.rect(0, 0, 210, 45, 'F');
+
             doc.setTextColor(255, 255, 255);
             doc.setFontSize(22);
-            doc.text('Mandahuevos.com', 20, 25);
-            doc.setFontSize(10);
-            doc.text('ALBARÁN DE ENTREGA', 160, 25);
+            doc.text('mandamoshuevos', centerX, 15, { align: 'center' });
 
-            // Info Cliente
+            doc.setFontSize(10);
+            doc.text('MandamosHuevos S.L.', centerX, 22, { align: 'center' });
+
+            doc.setFontSize(8);
+            doc.setTextColor(200, 200, 200);
+            doc.text('CIF: B01782853', centerX, 27, { align: 'center' });
+            doc.text('Polígono Industrial El Huevo, Nave 3, 28000 Madrid', centerX, 32, { align: 'center' });
+            doc.text('ventas@mandamoshuevos.com | +34 691 562 824', centerX, 37, { align: 'center' });
+
+            // Título Documento
+            doc.setFontSize(14);
+            doc.setTextColor(251, 191, 36);
+            doc.text('ALBARÁN DE ENTREGA', 190, 15, { align: 'right' });
+
+            // Info Cliente (Columna Izquierda)
             doc.setTextColor(0, 0, 0);
-            doc.setFontSize(12);
-            doc.text('DATOS DEL CLIENTE', 20, 55);
-            doc.setFontSize(10);
-            doc.text(`Nombre: ${profile?.full_name || order.userId}`, 20, 65);
-            doc.text(`Dirección: ${profile?.address || 'No especificada'}`, 20, 72);
-            doc.text(`Población: ${order.deliveryDate ? 'Cita programada' : 'N/A'}`, 20, 79);
-            doc.text(`Teléfono: ${profile?.phone || 'N/A'}`, 20, 86);
+            const contentStartY = 60;
+            const margin = 20;
 
-            // Info Pedido
-            doc.text('DATOS DEL PEDIDO', 120, 55);
-            doc.text(`Nº Albarán: ${order.invoiceNumber}`, 120, 65);
-            doc.text(`Fecha Pedido: ${new Date(order.createdAt).toLocaleDateString()}`, 120, 72);
-            doc.text(`Entrega: ${new Date(order.deliveryDate).toLocaleDateString()}`, 120, 79);
-            doc.text(`Pago: ${order.paymentMethod === 'transfer' ? 'Transferencia' : 'Bizum'}`, 120, 86);
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.text('DATOS DEL CLIENTE', margin, contentStartY);
+            doc.setFont(undefined, 'normal');
+
+            doc.setFontSize(10);
+            let yPos = contentStartY + 10;
+            const lineHeight = 5;
+
+            doc.text(`Nombre: ${profile?.full_name || order.userId}`, margin, yPos); yPos += lineHeight;
+            doc.text(`Dirección: ${order.shippingAddress || profile?.address || 'No especificada'}`, margin, yPos); yPos += lineHeight;
+            doc.text(`Población: ${order.shippingTown || (order.deliveryDate ? 'Entrega Programada' : 'N/A')}`, margin, yPos); yPos += lineHeight;
+            doc.text(`Teléfono: ${profile?.phone || 'N/A'}`, margin, yPos);
+
+            // Info Pedido (Columna Derecha - Tabulada)
+            const labelX = 120;
+            const valueX = 190;
+
+            doc.setFontSize(11);
+            doc.setFont(undefined, 'bold');
+            doc.text('DATOS DEL PEDIDO', labelX, contentStartY);
+            doc.setFont(undefined, 'normal');
+
+            doc.setFontSize(10);
+            yPos = contentStartY + 10;
+
+            doc.text('Nº Albarán:', labelX, yPos);
+            doc.text(order.invoiceNumber || '---', valueX, yPos, { align: 'right' });
+            yPos += lineHeight;
+
+            doc.text('Fecha Pedido:', labelX, yPos);
+            doc.text(new Date(order.createdAt).toLocaleDateString(), valueX, yPos, { align: 'right' });
+            yPos += lineHeight;
+
+            doc.text('Entrega:', labelX, yPos);
+            doc.text(new Date(order.deliveryDate).toLocaleDateString(), valueX, yPos, { align: 'right' });
+            yPos += lineHeight;
+
+            doc.text('Pago:', labelX, yPos);
+            doc.text(order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado', valueX, yPos, { align: 'right' });
 
             // Tabla
             const products = OrderService.getProducts();

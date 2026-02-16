@@ -47,7 +47,7 @@ export function Login() {
             <div className="glass-card">
                 <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <h2 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Bienvenido</h2>
-                    <p style={{ color: 'var(--color-text-secondary)' }}>Accede a tu cuenta de Mandahuevos</p>
+                    <p style={{ color: 'var(--color-text-secondary)' }}>Accede a tu cuenta de MandamosHuevos</p>
                 </div>
 
                 {error && (
