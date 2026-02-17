@@ -10,7 +10,7 @@ export function Legal() {
                     En cumplimiento con el deber de información recogido en artículo 10 de la Ley 34/2002, de 11 de julio, de Servicios de la Sociedad de la Información y del Comercio Electrónico (LSSICE), el propietario de la web, le informa de lo siguiente:
                 </p>
                 <ul style={{ listStyle: 'none', padding: 0 }}>
-                    <li><strong>Denominación social:</strong> Mandahuevos S.L.</li>
+                    <li><strong>Denominación social:</strong> MandamosHuevos S.L.</li>
                     <li><strong>NIF:</strong> B-12345678</li>
                     <li><strong>Domicilio:</strong> Polígono Industrial El Huevo, Nave 3, Madrid, España</li>
                     <li><strong>Email:</strong> ventas@mandamoshuevos.com</li>
@@ -20,7 +20,7 @@ export function Legal() {
             <section style={{ marginBottom: '2rem' }}>
                 <h3>Política de Privacidad</h3>
                 <p style={{ marginBottom: '1rem', lineHeight: 1.6 }}>
-                    Los datos facilitados mediante este formulario serán incorporados a un fichero titularidad de Mandahuevos S.L. con la finalidad de gestionar su pedido.
+                    Los datos facilitados mediante este formulario serán incorporados a un fichero titularidad de MandamosHuevos S.L. con la finalidad de gestionar su pedido.
                 </p>
                 <p style={{ marginBottom: '1rem', lineHeight: 1.6 }}>
                     Puede ejercer sus derechos de acceso, rectificación, cancelación y oposición dirigiendo un escrito a nuestra dirección o email.

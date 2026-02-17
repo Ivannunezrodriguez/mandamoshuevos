@@ -113,9 +113,9 @@ export function Register() {
                     </div>
 
                     <div style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nombre Fiscal / Razón Social</label>
+                        <label htmlFor="name" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nombre Fiscal / Razón Social</label>
                         <input
-                            type="text" name="name"
+                            type="text" name="name" id="name"
                             value={formData.name} onChange={handleChange}
                             placeholder="Ej. Restaurante Pepe S.L." required
                             style={inputStyle}
@@ -123,9 +123,9 @@ export function Register() {
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>DNI / CIF</label>
+                        <label htmlFor="dni" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>DNI / CIF</label>
                         <input
-                            type="text" name="dni"
+                            type="text" name="dni" id="dni"
                             value={formData.dni} onChange={handleChange}
                             placeholder="B-12345678" required
                             style={inputStyle}
@@ -133,9 +133,9 @@ export function Register() {
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Teléfono</label>
+                        <label htmlFor="phone" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Teléfono</label>
                         <input
-                            type="tel" name="phone"
+                            type="tel" name="phone" id="phone"
                             value={formData.phone} onChange={handleChange}
                             placeholder="+34 600 000 000" required
                             style={inputStyle}
@@ -143,9 +143,9 @@ export function Register() {
                     </div>
 
                     <div style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dirección de Facturación</label>
+                        <label htmlFor="address" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dirección de Facturación</label>
                         <input
-                            type="text" name="address"
+                            type="text" name="address" id="address"
                             value={formData.address} onChange={handleChange}
                             placeholder="C/ Ejemplo, 12, 28000 Madrid" required
                             style={inputStyle}
@@ -157,9 +157,9 @@ export function Register() {
                     </div>
 
                     <div>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email</label>
+                        <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email</label>
                         <input
-                            type="email" name="email"
+                            type="email" name="email" id="email"
                             value={formData.email} onChange={handleChange}
                             placeholder="admin@empresa.com" required
                             style={inputStyle}
@@ -169,12 +169,13 @@ export function Register() {
 
 
                     <div style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Contraseña</label>
+                        <label htmlFor="password" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Contraseña</label>
                         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                             <input
-                                type={showPassword ? "text" : "password"} name="password"
+                                type={showPassword ? "text" : "password"} name="password" id="password"
                                 value={formData.password} onChange={handleChange}
                                 placeholder="••••••••" required
+                                autoComplete="new-password"
                                 style={{ ...inputStyle, paddingRight: '40px' }}
                             />
                             <button

@@ -103,11 +103,12 @@ export function Contact() {
                     ) : (
                         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Nombre</label>
+                                <label htmlFor="ct-firstname" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Nombre</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                                     <User size={20} color="var(--color-text-muted)" />
                                     <input
                                         type="text"
+                                        id="ct-firstname"
                                         name="firstname"
                                         placeholder="Tu nombre"
                                         value={formData.firstname}
@@ -119,11 +120,12 @@ export function Contact() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Email</label>
+                                <label htmlFor="ct-email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Email</label>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                                     <Envelope size={20} color="var(--color-text-muted)" />
                                     <input
                                         type="email"
+                                        id="ct-email"
                                         name="email"
                                         placeholder="tu@email.com"
                                         value={formData.email}
@@ -135,10 +137,11 @@ export function Contact() {
                             </div>
 
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Mensaje</label>
+                                <label htmlFor="ct-message" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Mensaje</label>
                                 <div style={{ display: 'flex', alignItems: 'start', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                                     <ChatTeardropText size={20} color="var(--color-text-muted)" style={{ marginTop: '0.2rem' }} />
                                     <textarea
+                                        id="ct-message"
                                         name="message"
                                         placeholder="¿En qué podemos ayudarte?"
                                         value={formData.message}

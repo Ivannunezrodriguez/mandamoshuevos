@@ -2,9 +2,9 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 // Claves de LocalStorage
-const USERS_KEY = 'mandahuevos_users';
-const ORDERS_KEY = 'mandahuevos_orders';
-const CURRENT_USER_KEY = 'mandahuevos_current_user';
+const USERS_KEY = 'mandamoshuevos_users';
+const ORDERS_KEY = 'mandamoshuevos_orders';
+const CURRENT_USER_KEY = 'mandamoshuevos_current_user';
 
 export const DbAdapter = {
     // --- AUTENTICACIÓN Y USUARIOS ---
@@ -432,8 +432,16 @@ export const DbAdapter = {
             return true;
         } else {
             const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+            console.log('Borrando pedido local. ID:', orderId);
+            console.log('Pedidos antes:', orders.length);
             const updatedOrders = orders.filter(o => o.id !== orderId);
+            console.log('Pedidos después:', updatedOrders.length);
             localStorage.setItem(ORDERS_KEY, JSON.stringify(updatedOrders));
+
+            // Verificación inmediata
+            const check = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+            console.log('Verificación lectura inmediata:', check.length);
+
             return true;
         }
     },
@@ -455,6 +463,23 @@ export const DbAdapter = {
         }
     },
 
+    getLowStockCount: async () => {
+        if (isSupabaseConfigured()) {
+            const { count, error } = await supabase
+                .from('inventory')
+                .select('*', { count: 'exact', head: true })
+                .lt('stock_quantity', 10);
+            if (error) {
+                console.warn("Error counting low stock:", error);
+                return 0;
+            }
+            return count;
+        } else {
+            const inventory = await DbAdapter.getInventory();
+            return inventory.filter(i => i.stock_quantity < 10).length;
+        }
+    },
+
     // --- INVENTARIO ---
     getInventory: async () => {
         if (isSupabaseConfigured()) {
@@ -464,7 +489,7 @@ export const DbAdapter = {
             if (error) throw error;
             return data;
         } else {
-            const inventory = JSON.parse(localStorage.getItem('mandahuevos_inventory') || '[]');
+            const inventory = JSON.parse(localStorage.getItem('mandamoshuevos_inventory') || '[]');
             if (inventory.length === 0) {
                 // Mock inicial local
                 return [
@@ -501,7 +526,7 @@ export const DbAdapter = {
             const index = inventory.findIndex(i => i.product_id === productId);
             if (index !== -1) {
                 inventory[index].stock_quantity += delta;
-                localStorage.setItem('mandahuevos_inventory', JSON.stringify(inventory));
+                localStorage.setItem('mandamoshuevos_inventory', JSON.stringify(inventory));
                 return inventory[index];
             }
             return null;

@@ -64,11 +64,11 @@ DO $$
 DECLARE
   admin_uid uuid;
 BEGIN
-  SELECT id INTO admin_uid FROM auth.users WHERE email = 'GranHuevon@mandahuevos.com';
+  SELECT id INTO admin_uid FROM auth.users WHERE email = 'GranHuevon@mandamoshuevos.com';
   
   IF admin_uid IS NOT NULL THEN
     INSERT INTO public.profiles (id, email, role, full_name, updated_at)
-    VALUES (admin_uid, 'GranHuevon@mandahuevos.com', 'admin', 'Gran Huevón', NOW())
+    VALUES (admin_uid, 'GranHuevon@mandamoshuevos.com', 'admin', 'Gran Huevón', NOW())
     ON CONFLICT (id) DO UPDATE 
     SET role = 'admin', full_name = 'Gran Huevón';
   END IF;

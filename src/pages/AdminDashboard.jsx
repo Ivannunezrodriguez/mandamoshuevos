@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { DbAdapter } from '../services/db.adapter';
+import { isSupabaseConfigured } from '../lib/supabase'; // Import missing function
 import { AdminService } from '../services/admin.service';
 import { OrderService } from '../services/order.service';
 import {
@@ -171,7 +172,7 @@ export function AdminDashboard() {
     };
 
     const handleDeleteOrder = async (orderId) => {
-        if (!window.confirm('¿ELIMINAR PEDIDO PERMANENTEMENTE? Esta acción no se puede deshacer.')) return;
+        // Removed confirmation per user request
         try {
             await DbAdapter.deleteOrder(orderId);
             setOrders(prev => prev.filter(o => o.id !== orderId));
@@ -297,7 +298,7 @@ export function AdminDashboard() {
             }
         });
 
-        console.log("Heatmap Data:", orderTownCounts); // Keep this log for a moment to debug in console
+        // console.log("Heatmap Data:", orderTownCounts); // Removed log
 
         // Use orderTownCounts instead of townCounts if we have orders
         const finalTownCounts = Object.keys(orderTownCounts).length > 0 ? orderTownCounts : townCounts;
@@ -305,11 +306,14 @@ export function AdminDashboard() {
         return { totalRevenue, totalOrders, salesByMonth, productCounts, townCounts: finalTownCounts };
     }, [orders, users]);
 
+
+
     if (loading) return <div style={{ color: 'white', textAlign: 'center', padding: '5rem' }}>Cargando panel...</div>;
 
     const products = OrderService.getProducts();
 
     const pendingCount = orders.filter(o => o.status === 'pending').length;
+    const lowStockCount = inventory.filter(i => i.stock_quantity < 10).length;
 
     return (
         <div className="container" style={{ paddingBottom: '5rem' }}>
@@ -350,7 +354,7 @@ export function AdminDashboard() {
                 <Package size={40} className="text-gold" />
                 <div>
                     <h1 style={{ margin: 0 }}>Panel de Administración</h1>
-                    <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>Gestión integral de Mandahuevos</p>
+                    <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>Gestión integral de MandamosHuevos</p>
                 </div>
             </div>
 
@@ -358,7 +362,7 @@ export function AdminDashboard() {
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '1rem', overflowX: 'auto' }}>
                 {[
                     { id: 'orders', icon: Truck, label: `Pedidos`, badge: pendingCount },
-                    { id: 'inventory', icon: Storefront, label: 'Inventario' },
+                    { id: 'inventory', icon: Storefront, label: 'Inventario', badge: lowStockCount },
                     { id: 'stats', icon: ChartBar, label: 'Estadísticas' },
                     { id: 'users', icon: User, label: `Usuarios (${users.length})` },
                 ].map(tab => (
@@ -413,6 +417,9 @@ export function AdminDashboard() {
                             <MagnifyingGlass size={20} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
                             <input
                                 type="text"
+                                name="searchOrders"
+                                id="searchOrders"
+                                aria-label="Buscar pedidos"
                                 placeholder="Buscar por cliente o factura..."
                                 value={filterText}
                                 onChange={(e) => setFilterText(e.target.value)}
@@ -422,6 +429,9 @@ export function AdminDashboard() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Funnel size={20} />
                             <select
+                                name="statusFilter"
+                                id="statusFilter"
+                                aria-label="Filtrar por estado"
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
                                 style={{ background: 'var(--color-bg-primary)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', color: 'white' }}
@@ -445,6 +455,8 @@ export function AdminDashboard() {
                             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                                 <input
                                     type="checkbox"
+                                    name="selectAllOrders"
+                                    id="selectAllOrders"
                                     checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
                                     onChange={toggleSelectAll}
                                 />
@@ -460,6 +472,9 @@ export function AdminDashboard() {
                             <div className="order-grid-item">
                                 <input
                                     type="checkbox"
+                                    name={`selectOrder-${order.id}`}
+                                    id={`selectOrder-${order.id}`}
+                                    aria-label={`Seleccionar pedido ${order.invoiceNumber}`}
                                     checked={selectedOrders.has(order.id)}
                                     onChange={() => toggleSelectOrder(order.id)}
                                     style={{ transform: 'scale(1.2)' }}
@@ -729,6 +744,9 @@ export function AdminDashboard() {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                 <input
                                                     type="number"
+                                                    name={`discount-${u.id}`}
+                                                    id={`discount-${u.id}`}
+                                                    aria-label={`Descuento para usuario ${u.full_name}`}
                                                     min="0"
                                                     max="100"
                                                     defaultValue={u.discount_percent || 0}
@@ -749,7 +767,7 @@ export function AdminDashboard() {
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
                                             <a
-                                                href={`mailto:${u.email}?subject=Oferta Especial Mandahuevos&body=Hola ${u.full_name || ''}, tienes un descuento especial del ${u.discount_percent || 0}% en tu próxima compra...`}
+                                                href={`mailto:${u.email}?subject=Oferta Especial MandamosHuevos&body=Hola ${u.full_name || ''}, tienes un descuento especial del ${u.discount_percent || 0}% en tu próxima compra...`}
                                                 className="btn-primary"
                                                 style={{ textDecoration: 'none', fontSize: '0.9rem', padding: '0.5rem 1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
                                             >

@@ -29,13 +29,19 @@ export function Layout() {
             navigate('/login');
         } else {
             setUser(currentUser);
-            // Si es admin, obtener contador de pendientes
+            // Si es admin, obtener contador de notificaciones (Pendientes + Stock Bajo)
             if (currentUser.role === 'admin') {
-                DbAdapter.getPendingOrdersCount().then(startedCount => setAdminPendingCount(startedCount));
+                const updateCounts = async () => {
+                    const [pending, lowStock] = await Promise.all([
+                        DbAdapter.getPendingOrdersCount(),
+                        DbAdapter.getLowStockCount()
+                    ]);
+                    setAdminPendingCount(pending + lowStock);
+                };
+
+                updateCounts();
                 // Opcional: Polling simple cada 30s
-                const interval = setInterval(() => {
-                    DbAdapter.getPendingOrdersCount().then(c => setAdminPendingCount(c));
-                }, 30000);
+                const interval = setInterval(updateCounts, 30000);
                 return () => clearInterval(interval);
             }
         }

@@ -1,7 +1,7 @@
 
 import { DbAdapter } from './db.adapter';
 
-const CURRENT_USER_KEY = 'mandahuevos_current_user';
+const CURRENT_USER_KEY = 'mandamoshuevos_current_user';
 
 export const AuthService = {
   login: async (identifier, password) => {

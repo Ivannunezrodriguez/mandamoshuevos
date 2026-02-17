@@ -66,11 +66,14 @@ export function Login() {
 
                 <form onSubmit={handleSubmit}>
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Email</label>
+                        <label htmlFor="email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Email</label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                             <Envelope size={20} color="var(--color-text-muted)" />
                             <input
                                 type="text"
+                                id="email"
+                                name="email"
+                                autoComplete="email"
                                 placeholder="tu@email.com"
                                 style={{ background: 'transparent', border: 'none', color: 'var(--color-text-primary)', width: '100%', outline: 'none' }}
                                 value={identifier}
@@ -82,13 +85,16 @@ export function Login() {
 
                     <div style={{ marginBottom: '2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                            <label style={{ fontSize: '0.9rem' }}>Contraseña</label>
+                            <label htmlFor="password" style={{ fontSize: '0.9rem' }}>Contraseña</label>
                             <a href="#" style={{ fontSize: '0.8rem', color: 'var(--color-accent-primary)', textDecoration: 'none' }}>¿Olvidaste tu contraseña?</a>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                             <Lock size={20} color="var(--color-text-muted)" />
                             <input
                                 type={showPassword ? "text" : "password"}
+                                id="password"
+                                name="password"
+                                autoComplete="current-password"
                                 placeholder="••••••••"
                                 style={{ background: 'transparent', border: 'none', color: 'var(--color-text-primary)', width: '100%', outline: 'none' }}
                                 value={password}

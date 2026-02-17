@@ -217,10 +217,12 @@ export function NewOrder() {
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Población de Entrega <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                    <label htmlFor="delivery-town" style={{ display: 'block', marginBottom: '0.5rem' }}>Población de Entrega <span style={{ color: 'var(--color-error)' }}>*</span></label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !selectedTown ? '1px solid var(--color-error)' : '1px solid transparent' }}>
                         <MapPin size={24} color="var(--color-text-primary)" />
                         <select
+                            id="delivery-town"
+                            name="delivery-town"
                             value={selectedTown}
                             onChange={(e) => setSelectedTown(e.target.value)}
                             style={{ background: 'transparent', border: 'none', color: 'var(--color-text-primary)', width: '100%', outline: 'none', cursor: 'pointer', padding: '0.25rem' }}
@@ -234,10 +236,12 @@ export function NewOrder() {
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Dirección de Entrega (Calle y Nº) <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                    <label htmlFor="delivery-address" style={{ display: 'block', marginBottom: '0.5rem' }}>Dirección de Entrega (Calle y Nº) <span style={{ color: 'var(--color-error)' }}>*</span></label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !deliveryAddress ? '1px solid var(--color-error)' : '1px solid transparent' }}>
                         <input
                             type="text"
+                            id="delivery-address"
+                            name="delivery-address"
                             placeholder="Ej: Calle Gran Via 12, 3ºA"
                             value={deliveryAddress}
                             onChange={(e) => setDeliveryAddress(e.target.value)}
@@ -247,12 +251,14 @@ export function NewOrder() {
                 </div>
 
                 <div style={{ marginBottom: '2rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.5rem' }}>Fecha de Entrega <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                    <label htmlFor="delivery-date" style={{ display: 'block', marginBottom: '0.5rem' }}>Fecha de Entrega <span style={{ color: 'var(--color-error)' }}>*</span></label>
                     <div
                         style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !deliveryDate ? '1px solid var(--color-error)' : '1px solid transparent', cursor: selectedTown ? 'pointer' : 'not-allowed', opacity: selectedTown ? 1 : 0.5 }}
                     >
                         <CalendarCheck size={24} color="var(--color-text-primary)" />
                         <select
+                            id="delivery-date"
+                            name="delivery-date"
                             disabled={!selectedTown}
                             value={deliveryDate}
                             onChange={(e) => setDeliveryDate(e.target.value)}

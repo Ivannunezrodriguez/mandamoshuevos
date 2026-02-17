@@ -114,29 +114,29 @@ export function Profile() {
                     </h3>
                     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1rem' }}>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nombre Fiscal / Razón Social</label>
-                            <input type="text" name="name" value={formData.name} onChange={handleChange} required />
+                            <label htmlFor="pf-name" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nombre Fiscal / Razón Social</label>
+                            <input type="text" id="pf-name" name="name" value={formData.name} onChange={handleChange} required />
                         </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>DNI / CIF</label>
-                                <input type="text" name="dni" value={formData.dni} onChange={handleChange} />
+                                <label htmlFor="pf-dni" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>DNI / CIF</label>
+                                <input type="text" id="pf-dni" name="dni" value={formData.dni} onChange={handleChange} />
                             </div>
                             <div>
-                                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Teléfono</label>
-                                <input type="text" name="phone" value={formData.phone} onChange={handleChange} />
+                                <label htmlFor="pf-phone" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Teléfono</label>
+                                <input type="text" id="pf-phone" name="phone" value={formData.phone} onChange={handleChange} />
                             </div>
                         </div>
 
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dirección</label>
-                            <input type="text" name="address" value={formData.address} onChange={handleChange} />
+                            <label htmlFor="pf-address" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dirección</label>
+                            <input type="text" id="pf-address" name="address" value={formData.address} onChange={handleChange} />
                         </div>
 
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email</label>
-                            <input type="email" name="email" value={formData.email} disabled style={{ opacity: 0.7 }} />
+                            <label htmlFor="pf-email" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Email</label>
+                            <input type="email" id="pf-email" name="email" value={formData.email} disabled style={{ opacity: 0.7 }} />
                         </div>
 
                         <button type="submit" className="btn-primary" disabled={loading}>
@@ -152,12 +152,12 @@ export function Profile() {
                     </h3>
                     <form onSubmit={handlePasswordSubmit} style={{ display: 'grid', gap: '1rem' }}>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nueva Contraseña</label>
-                            <input type="password" name="new" value={passData.new} onChange={handlePassChange} placeholder="Mínimo 6 caracteres" />
+                            <label htmlFor="pf-newpass" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Nueva Contraseña</label>
+                            <input type="password" id="pf-newpass" name="new" value={passData.new} onChange={handlePassChange} placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
                         </div>
                         <div>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Confirmar Nueva</label>
-                            <input type="password" name="confirm" value={passData.confirm} onChange={handlePassChange} placeholder="Repite la contraseña" />
+                            <label htmlFor="pf-confirmpass" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Confirmar Nueva</label>
+                            <input type="password" id="pf-confirmpass" name="confirm" value={passData.confirm} onChange={handlePassChange} placeholder="Repite la contraseña" autoComplete="new-password" />
                         </div>
 
                         <button type="submit" className="btn-primary" disabled={loading}>
