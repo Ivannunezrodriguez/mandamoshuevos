@@ -43,9 +43,11 @@ export function Register() {
         }
 
         // Validar Contraseña (Mínimo 8 caracteres, letras, números y especial)
-        const passRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+        // Validar Contraseña (Mínimo 8 caracteres, letras, números y especial)
+        // Se permite cualquier caracter especial
+        const passRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$/;
         if (!passRegex.test(formData.password)) {
-            setError('La contraseña debe tener al menos 8 caracteres, incluir letras, números y un carácter especial (@$!%*?&).');
+            setError('La contraseña debe tener al menos 8 caracteres, incluir letras, números y algún carácter especial.');
             return;
         }
 
