@@ -19,7 +19,7 @@ export function History() {
         if (user) {
             const fetchOrders = async () => {
                 // FIX: Usar email como prioridad para coincidir con NewOrder.jsx
-                const data = await OrderService.getUserOrders(user.email || user.username || user.id);
+                const data = await OrderService.getUserOrders(user.id || user.email || user.username);
                 setOrders(data);
             };
             fetchOrders();

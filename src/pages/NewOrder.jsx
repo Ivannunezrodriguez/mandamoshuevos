@@ -171,7 +171,7 @@ export function NewOrder() {
             // REMOVED AUTO-UPDATE USER ADDRESS - SEPARATING CONCERNS AS REQUESTED
 
             const orderData = {
-                userId: user.email || user.username || user.id,
+                userId: user.id || user.email || user.username,
                 items: orderItems,
                 deliveryDate: deliveryDate,
                 total: calculateTotal(),
