@@ -2,28 +2,32 @@
 import { MapPin, Envelope, WhatsappLogo, User, ChatTeardropText } from 'phosphor-react';
 import { useState } from 'react';
 
+/**
+ * Componente Contacto
+ * 
+ * Expone la información de contacto físico y digital (WhatsApp, Email)
+ * e incluye un formulario simulado integrado con HubSpot (JS Tracking).
+ */
 export function Contact() {
     const [formData, setFormData] = useState({
-        firstname: '',
+        firstname: '', // Requerido por la convención de HubSpot
         email: '',
         message: ''
     });
-    const [submitted, setSubmitted] = useState(false);
+    const [submitted, setSubmitted] = useState(false); // Feedback visual tras envío
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
+    /**
+     * Handler de Envío: Sincroniza con los mecanismos de tracking.
+     */
     const handleSubmit = (e) => {
-        // HubSpot Non-HubSpot Forms listens to the submit event.
-        // We don't prevent default immediately if we want a traditional post, 
-        // but for SPA we prevent default and show a message.
-        // Note: For HubSpot to reliably catch this in a SPA without API, 
-        // sometimes a real DOM submit is preferred, or using their tracking API.
-        // However, most often 'preventDefault' is fine if the script is loaded.
-        // We'll just clear the form and show a success message for UX.
+        // Nota: HubSpot captura automáticamente este evento si el script está cargado.
         e.preventDefault();
         setSubmitted(true);
+        // Reseteo de UI a los 5 segundos
         setTimeout(() => setSubmitted(false), 5000);
         setFormData({ firstname: '', email: '', message: '' });
     };

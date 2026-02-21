@@ -1,0 +1,153 @@
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\components\Layout.jsx
+  47:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  45 |             navigate('/login');
+  46 |         } else {
+> 47 |             setUser(currentUser);
+     |             ^^^^^^^ Avoid calling setState() directly within an effect
+  48 |
+  49 |             // Si el usuario es administrador, cargamos los contadores de notificaciones
+  50 |             if (currentUser.role === 'admin') {  react-hooks/set-state-in-effect
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\pages\AdminDashboard.jsx
+    4:10  error    'isSupabaseConfigured' is defined but never used. Allowed unused vars must match /^[A-Z_]/u                           no-unused-vars
+  104:8   warning  React Hook useEffect has a missing dependency: 'checkAdminAndLoad'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\pages\NewOrder.jsx
+   81:17  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  79 |                     }
+  80 |                 });
+> 81 |                 setCart(initialCart);
+     |                 ^^^^^^^ Avoid calling setState() directly within an effect
+  82 |             }
+  83 |             if (location.state.isRecurring) {
+  84 |                 setIsRecurringOrder(true);  react-hooks/set-state-in-effect
+  145:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  143 |     useEffect(() => {
+  144 |         if (!selectedTown) {
+> 145 |             setAvailableDates([]);
+      |             ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  146 |             setDeliveryDate('');
+  147 |             return;
+  148 |         }                       react-hooks/set-state-in-effect
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\pages\NewOrder.test.jsx
+  2:37  error  'waitFor' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\services\admin.service.js
+   27:25  error  'jsPDF' is not defined         no-undef
+   98:26  error  'OrderService' is not defined  no-undef
+  109:9   error  'autoTable' is not defined     no-undef
+  138:30  error  'DbAdapter' is not defined     no-undef
+  147:25  error  'jsPDF' is not defined         no-undef
+  157:33  error  'DbAdapter' is not defined     no-undef
+  240:30  error  'OrderService' is not defined  no-undef
+  251:13  error  'autoTable' is not defined     no-undef
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\services\db.adapter.js
+   22:14  error  'isSupabaseConfigured' is not defined  no-undef
+   26:13  error  'isSupabaseConfigured' is not defined  no-undef
+   27:43  error  'supabase' is not defined              no-undef
+   36:64  error  'supabase' is not defined              no-undef
+   57:76  error  'supabase' is not defined              no-undef
+   79:59  error  'USERS_KEY' is not defined             no-undef
+   95:13  error  'isSupabaseConfigured' is not defined  no-undef
+   96:64  error  'supabase' is not defined              no-undef
+  126:66  error  'supabase' is not defined              no-undef
+  137:59  error  'USERS_KEY' is not defined             no-undef
+  139:34  error  'USERS_KEY' is not defined             no-undef
+  149:13  error  'isSupabaseConfigured' is not defined  no-undef
+  150:43  error  'supabase' is not defined              no-undef
+  160:52  error  'USERS_KEY' is not defined             no-undef
+  170:13  error  'isSupabaseConfigured' is not defined  no-undef
+  171:25  error  'supabase' is not defined              no-undef
+  185:59  error  'USERS_KEY' is not defined             no-undef
+  197:13  error  'isSupabaseConfigured' is not defined  no-undef
+  204:43  error  'supabase' is not defined              no-undef
+  213:59  error  'USERS_KEY' is not defined             no-undef
+  217:38  error  'USERS_KEY' is not defined             no-undef
+  218:69  error  'CURRENT_USER_KEY' is not defined      no-undef
+  220:42  error  'CURRENT_USER_KEY' is not defined      no-undef
+  235:13  error  'isSupabaseConfigured' is not defined  no-undef
+  236:56  error  'supabase' is not defined              no-undef
+  245:59  error  'USERS_KEY' is not defined             no-undef
+  249:38  error  'USERS_KEY' is not defined             no-undef
+  264:13  error  'isSupabaseConfigured' is not defined  no-undef
+  266:62  error  'supabase' is not defined              no-undef
+  292:49  error  'supabase' is not defined              no-undef
+  301:60  error  'ORDERS_KEY' is not defined            no-undef
+  311:34  error  'ORDERS_KEY' is not defined            no-undef
+  322:13  error  'isSupabaseConfigured' is not defined  no-undef
+  323:51  error  'supabase' is not defined              no-undef
+  354:60  error  'ORDERS_KEY' is not defined            no-undef
+  364:13  error  'isSupabaseConfigured' is not defined  no-undef
+  365:43  error  'supabase' is not defined              no-undef
+  371:60  error  'ORDERS_KEY' is not defined            no-undef
+  383:13  error  'isSupabaseConfigured' is not defined  no-undef
+  384:51  error  'supabase' is not defined              no-undef
+  415:60  error  'ORDERS_KEY' is not defined            no-undef
+  427:13  error  'isSupabaseConfigured' is not defined  no-undef
+  428:43  error  'supabase' is not defined              no-undef
+  437:60  error  'ORDERS_KEY' is not defined            no-undef
+  441:38  error  'ORDERS_KEY' is not defined            no-undef
+  454:13  error  'isSupabaseConfigured' is not defined  no-undef
+  455:49  error  'supabase' is not defined              no-undef
+  462:37  error  'supabase' is not defined              no-undef
+  470:60  error  'ORDERS_KEY' is not defined            no-undef
+  472:34  error  'ORDERS_KEY' is not defined            no-undef
+  482:13  error  'isSupabaseConfigured' is not defined  no-undef
+  483:44  error  'supabase' is not defined              no-undef
+  490:60  error  'ORDERS_KEY' is not defined            no-undef
+  502:13  error  'isSupabaseConfigured' is not defined  no-undef
+  503:43  error  'supabase' is not defined              no-undef
+  529:13  error  'isSupabaseConfigured' is not defined  no-undef
+  530:42  error  'supabase' is not defined              no-undef
+  538:43  error  'supabase' is not defined              no-undef
+  564:13  error  'isSupabaseConfigured' is not defined  no-undef
+  565:37  error  'supabase' is not defined              no-undef
+  569:58  error  'CURRENT_USER_KEY' is not defined      no-undef
+  571:63  error  'USERS_KEY' is not defined             no-undef
+  575:42  error  'USERS_KEY' is not defined             no-undef
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\services\order.service.js
+  61:29  error  'DbAdapter' is not defined     no-undef
+  65:19  error  'AdminService' is not defined  no-undef
+  75:22  error  'DbAdapter' is not defined     no-undef
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\tests\security_audit.js
+    7:22  error  'process' is not defined  no-undef
+    8:27  error  'process' is not defined  no-undef
+   13:5   error  'process' is not defined  no-undef
+   77:17  error  'process' is not defined  no-undef
+  109:13  error  'process' is not defined  no-undef
+  123:5   error  'process' is not defined  no-undef
+
+C:\Users\ivann\.gemini\antigravity\scratch\mandahuevos\src\tests\verify_admin.js
+   8:7   error  'mockLocalStorage' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+  16:7   error  'mockSupabase' is assigned a value but never used. Allowed unused vars must match /^[A-Z_]/u      no-unused-vars
+  81:21  error  'process' is not defined                                                                          no-undef
+  86:5   error  'process' is not defined                                                                          no-undef
+
+Ô£û 90 problems (89 errors, 1 warning)
+

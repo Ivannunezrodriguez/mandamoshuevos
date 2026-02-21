@@ -1,4 +1,12 @@
 
+import { Link } from 'react-router-dom';
+
+/**
+ * Componente Legal
+ * 
+ * Contiene los textos legales obligatorios: Aviso Legal y Política de Privacidad,
+ * adaptados a la normativa LSSICE y RGPD.
+ */
 export function Legal() {
     return (
         <div className="glass-card" style={{ maxWidth: '800px', margin: '0 auto' }}>

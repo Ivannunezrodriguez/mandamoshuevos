@@ -4,14 +4,23 @@ import { useNavigate, Link } from 'react-router-dom';
 import { AuthService } from '../services/auth.service';
 import { Envelope, Lock, GoogleLogo, ArrowRight, Eye, EyeSlash } from 'phosphor-react';
 
+/**
+ * Componente Login
+ * 
+ * Permite a los usuarios y administradores acceder al sistema.
+ * Soporta autenticación por email y gestiona los estados de carga y error de Supabase.
+ */
 export function Login() {
-    const [identifier, setIdentifier] = useState('');
+    const [identifier, setIdentifier] = useState('');     // Soporta tanto email como username (legacy)
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false); // Toggle visual para la contraseña
+    const [error, setError] = useState('');                 // Gestión de feedback negativo
+    const [loading, setLoading] = useState(false);           // Estado de espera de red
     const navigate = useNavigate();
 
+    /**
+     * Procesa el intento de conexión.
+     */
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -20,14 +29,19 @@ export function Login() {
         try {
             const user = await AuthService.login(identifier, password);
             if (user) {
+                // Almacenamos la sesión en el servicio antes de navegar
                 AuthService.completeLogin(user);
-                navigate('/');
+                if (user.role === 'admin') {
+                    navigate('/admin');
+                } else {
+                    navigate('/');
+                }
             } else {
                 setError('Credenciales incorrectas');
             }
         } catch (err) {
             console.error(err);
-            // Mensaje amigable si el error viene de Supabase
+            // Traducción de los errores técnicos de Supabase a mensajes comprensibles para el usuario
             if (err.message && err.message.includes('Invalid login credentials')) {
                 setError('Email o contraseña incorrectos.');
             } else if (err.message && err.message.includes('Email not confirmed')) {
@@ -86,7 +100,7 @@ export function Login() {
                     <div style={{ marginBottom: '2rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                             <label htmlFor="password" style={{ fontSize: '0.9rem' }}>Contraseña</label>
-                            <a href="#" style={{ fontSize: '0.8rem', color: 'var(--color-accent-primary)', textDecoration: 'none' }}>¿Olvidaste tu contraseña?</a>
+                            <Link to="/forgot-password" style={{ fontSize: '0.8rem', color: 'var(--color-accent-primary)', textDecoration: 'none' }}>¿Olvidaste tu contraseña?</Link>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                             <Lock size={20} color="var(--color-text-muted)" />

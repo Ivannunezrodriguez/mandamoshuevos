@@ -1,5 +1,5 @@
 :root {
-  /* Default Dark Theme */
+  /* Tema Oscuro por Defecto (Variables Globales) */
   --color-bg-primary: #0f0f11;
   --color-bg-secondary: #1a1a1d;
   --color-bg-tertiary: #252529;
@@ -15,7 +15,7 @@
   --glass-bg: rgba(26, 26, 29, 0.7);
   --glass-border: rgba(255, 255, 255, 0.05);
 
-  /* Typography & Layout stay the same */
+  /* Tipografía y Espaciados base (Se mantienen entre temas) */
   --font-family-base: 'Inter', system-ui, sans-serif;
   --font-family-heading: 'Outfit', sans-serif;
   --spacing-xs: 0.25rem;
@@ -45,7 +45,7 @@
   --glass-border: rgba(0, 0, 0, 0.1);
 }
 
-/* Base Styles */
+/* Estilos Base Globales (Reseteo y comportamiento estándar) */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -112,24 +112,24 @@ textarea {
   width: 100%;
 }
 
-/* FIX: Input visibility issues (White on White / Black on Black) */
-input.force-visible, 
-input[type="password"], 
-input[type="email"], 
+/* ARREGLO: Forzar visibilidad correcta del texto en inputs (Evita Blanco sobre Blanco o Negro sobre Negro) */
+input.force-visible,
+input[type="password"],
+input[type="email"],
 input[type="text"] {
-    background-color: var(--color-bg-tertiary) !important;
-    color: var(--color-text-primary) !important;
-    -webkit-text-fill-color: var(--color-text-primary) !important;
+  background-color: var(--color-bg-tertiary) !important;
+  color: var(--color-text-primary) !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
 }
 
-/* Autocomplete styles fix */
+/* Eliminación del fondo amarillo/azul predeterminado del autocompletado en navegadores como Chrome */
 input:-webkit-autofill,
-input:-webkit-autofill:hover, 
-input:-webkit-autofill:focus, 
-input:-webkit-autofill:active{
-    -webkit-box-shadow: 0 0 0 30px var(--color-bg-tertiary) inset !important;
-    -webkit-text-fill-color: var(--color-text-primary) !important;
-    transition: background-color 5000s ease-in-out 0s;
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px var(--color-bg-tertiary) inset !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 input:focus,
@@ -139,7 +139,7 @@ textarea:focus {
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
 }
 
-/* Utilities */
+/* Clases Utilitarias (Reutilizables directamente como className en React) */
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -149,7 +149,7 @@ textarea:focus {
 .btn-primary {
   background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-hover));
   color: var(--color-bg-primary);
-  /* Dark text on bright button for contrast */
+  /* Texto e icono oscuro sobre botón brillante para maximizar el contraste y legibilidad */
   padding: 0.75rem 1.5rem;
   border-radius: var(--radius-md);
   font-weight: 600;
@@ -177,7 +177,7 @@ textarea:focus {
   color: var(--color-accent-primary);
 }
 
-/* Responsive */
+/* Diseño Adaptativo (Responsive): Cambios de diseño para pantallas de móviles (menos de 640px) */
 @media (max-width: 640px) {
   h1 {
     font-size: 2rem;

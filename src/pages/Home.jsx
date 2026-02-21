@@ -2,25 +2,40 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Receipt, ClockCounterClockwise, ShoppingCart, ArrowRight, Egg } from 'phosphor-react';
-import { OrderService, PRODUCTS } from '../services/order.service';
+import { OrderService } from '../services/order.service';
+import { PRODUCTS } from '../services/catalog.service';
 import { AuthService } from '../services/auth.service';
 import { DbAdapter } from '../services/db.adapter';
 
+/**
+ * Componente Home
+ * 
+ * Actúa como el escritorio personal del usuario. Muestra:
+ * 1. Estadísticas globales de impacto (huevos totales).
+ * 2. Sugerencias inteligentes para repetir compras.
+ * 3. Accesos directos a las áreas principales.
+ */
 export function Home() {
-    const [recurringOrder, setRecurringOrder] = useState(null);
-    const [totalEggs, setTotalEggs] = useState(0);
+    const [recurringOrder, setRecurringOrder] = useState(null); // Último pedido para la sugerencia rápida
+    const [totalEggs, setTotalEggs] = useState(0);             // Contador total de huevos consumidos
     const user = AuthService.getCurrentUser();
     const navigate = useNavigate();
 
+    /**
+     * EFECTO: Carga de datos de escritorio.
+     * Recupera la sugerencia de pedido y las estadísticas globales.
+     */
     useEffect(() => {
         if (user) {
             const fetchSuggestion = async () => {
-                const suggestion = await OrderService.getRecurringSuggestion(user.username);
+                // El servicio analiza el historial para proponer un "Pedido Habitual"
+                const suggestion = await OrderService.getRecurringSuggestion(user.id);
                 setRecurringOrder(suggestion);
             };
             fetchSuggestion();
 
             const fetchStats = async () => {
+                // Cálculo de huevos totales sumando todos los cartones de todos los pedidos
                 const items = await DbAdapter.getGlobalStats();
                 const total = items.reduce((sum, item) => {
                     const product = PRODUCTS.find(p => p.id === (item.product_id || item.id));
@@ -30,8 +45,11 @@ export function Home() {
             };
             fetchStats();
         }
-    }, [user]);
+    }, [user?.id]); // Usamos user.id para evitar bucles si el objeto cambia de referencia
 
+    /**
+     * Acción de compra rápida: Redirige al proceso de compra con la sugerencia ya cargada.
+     */
     const handleQuickOrder = () => {
         if (recurringOrder) {
             navigate('/new-order', { state: { initialCart: recurringOrder.items } });
@@ -161,13 +179,7 @@ export function Home() {
                     <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
                         Descubre recetas y beneficios del huevo en nuestro blog.
                     </p>
-                    <Link to="/blog" style={{
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '1px solid var(--color-border)',
-                        padding: '0.5rem 1rem',
-                        borderRadius: 'var(--radius-md)',
-                        color: 'var(--color-text-primary)'
-                    }}>
+                    <Link to="/blog" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-accent-primary)', fontWeight: 600 }}>
                         Ir al Blog
                     </Link>
                 </div>

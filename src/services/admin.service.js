@@ -1,23 +1,38 @@
-
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DbAdapter } from './db.adapter';
-import { OrderService } from './order.service';
+import { PRODUCTS } from './catalog.service';
 
+/**
+ * SERVICIO ADMINISTRATIVO (AdminService)
+ * 
+ * Contiene la lógica exclusiva para los administradores:
+ * - Notificaciones de nuevos pedidos.
+ * - Generación de albaranes de entrega (individuales y por lotes).
+ * - Consultas globales de pedidos y perfiles.
+ */
 export const AdminService = {
-    // 1. Notificación a Ivan (Simulado por ahora)
+
+    /**
+     * Envía una notificación simulada cuando entra un nuevo pedido.
+     * @param {Object} orderData - Datos resumidos del pedido.
+     */
     notifyNewOrder: async (orderData) => {
         console.log(`[NOTIFICACIÓN] Enviando informe a ivann20@gmail.com sobre el pedido ${orderData.invoiceNumber || orderData.id}`);
-        // Aquí iría la llamada a Supabase Edge Function o API de Email
+        // TODO: Integrar con una API de correo real o funciones de Supabase
         return true;
     },
 
-    // 2. Generación de Albarán PDF
+    /**
+     * Genera un ALBARÁN DE ENTREGA en PDF.
+     * A diferencia de la factura, el albarán es para el transportista y no incluye IVA detallado,
+     * pero sí instrucciones de entrega y método de pago (si es "al contado").
+     */
     generateDeliveryNote: (order, userProfile) => {
         const doc = new jsPDF();
-        const primaryColor = [251, 191, 36]; // #fbbf24
+        const primaryColor = [251, 191, 36]; // Amarillo corporativo
 
-        // Cabecera (Centrada)
+        // --- CABECERA ---
         const pageWidth = doc.internal.pageSize.width;
         const centerX = pageWidth / 2;
 
@@ -31,16 +46,14 @@ export const AdminService = {
         doc.setFontSize(8);
         doc.setTextColor(200, 200, 200);
         doc.text('CIF: B01782853', centerX, 30, { align: 'center' });
-
         doc.text('ventas@mandamoshuevos.com | +34 691 562 824', centerX, 35, { align: 'center' });
-        "doc.text('www.mandamoshuevos.com', centerX, 40, { align: 'center' });"
+        doc.text('www.mandamoshuevos.com', centerX, 40, { align: 'center' });
 
-        // Título Documento
         doc.setFontSize(14);
         doc.setTextColor(251, 191, 36);
         doc.text('ALBARÁN', 190, 15, { align: 'right' });
 
-        // Info Cliente (Columna Izquierda)
+        // --- DATOS DEL CLIENTE ---
         doc.setTextColor(0, 0, 0);
         const contentStartY = 60;
         const margin = 20;
@@ -56,10 +69,21 @@ export const AdminService = {
 
         doc.text(`Nombre: ${userProfile?.full_name || order.userId}`, margin, yPos); yPos += lineHeight;
         doc.text(`Dirección: ${order.shippingAddress || userProfile?.address || 'No especificada'}`, margin, yPos); yPos += lineHeight;
-        doc.text(`Población: ${order.shippingTown || (order.deliveryDate ? 'Entrega Programada' : 'N/A')}`, margin, yPos); yPos += lineHeight;
+        const address2 = order.shippingAddress2 || userProfile?.address_2 || '';
+        if (address2) {
+            doc.text(`Dirección 2: ${address2}`, margin, yPos); yPos += lineHeight;
+        }
+        const pc = order.shippingPostalCode || userProfile?.postal_code || '';
+        if (pc) {
+            doc.text(`C.P.: ${pc}`, margin, yPos); yPos += lineHeight;
+        }
+        const town = order.shippingTown || userProfile?.town || '';
+        if (town) {
+            doc.text(`Localidad: ${town}`, margin, yPos); yPos += lineHeight;
+        }
         doc.text(`Teléfono: ${userProfile?.phone || 'N/A'}`, margin, yPos);
 
-        // Info Pedido (Columna Derecha - Tabulada)
+        // --- INFORMACIÓN DE REPARTO ---
         const labelX = 120;
         const valueX = 190;
 
@@ -86,8 +110,8 @@ export const AdminService = {
         doc.text('Pago:', labelX, yPos);
         doc.text(order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado', valueX, yPos, { align: 'right' });
 
-        // Tabla de Productos
-        const products = OrderService.getProducts();
+        // --- TABLA DE CARGA ---
+        const products = PRODUCTS;
         const tableBody = order.items.map(item => {
             const product = products.find(p => p.id === item.id);
             return [
@@ -106,12 +130,11 @@ export const AdminService = {
             alternateRowStyles: { fillColor: [249, 250, 251] }
         });
 
-        // Total
+        // TOTAL A COBRAR (Fundamental para pago 'al contado')
         const finalY = doc.lastAutoTable.finalY + 10;
         doc.setFontSize(14);
         doc.text(`TOTAL: ${order.total.toFixed(2)} €`, 160, finalY);
 
-        // Pie
         doc.setFontSize(8);
         doc.setFont(undefined, 'normal');
         doc.setTextColor(150);
@@ -124,13 +147,18 @@ export const AdminService = {
         doc.save(`albaran_${order.invoiceNumber}.pdf`);
     },
 
-    // 3. Obtener todos los pedidos con info de usuario
+    /**
+     * Obtiene todos los pedidos del sistema incluyendo los perfiles de usuario.
+     */
     getOrdersWithProfiles: async () => {
         const orders = await DbAdapter.getAllOrders();
         return orders;
     },
 
-    // 4. Generación Masiva de Albaranes
+    /**
+     * Generación Masiva: Crea un PDF con múltiples páginas, un albarán por página.
+     * @param {Array} orders - Lista de pedidos a imprimir.
+     */
     generateBulkDeliveryNotes: async (orders) => {
         const doc = new jsPDF();
 
@@ -194,7 +222,18 @@ export const AdminService = {
 
             doc.text(`Nombre: ${profile?.full_name || order.userId}`, margin, yPos); yPos += lineHeight;
             doc.text(`Dirección: ${order.shippingAddress || profile?.address || 'No especificada'}`, margin, yPos); yPos += lineHeight;
-            doc.text(`Población: ${order.shippingTown || (order.deliveryDate ? 'Entrega Programada' : 'N/A')}`, margin, yPos); yPos += lineHeight;
+            const bAddress2 = order.shippingAddress2 || profile?.address_2 || '';
+            if (bAddress2) {
+                doc.text(`Dirección 2: ${bAddress2}`, margin, yPos); yPos += lineHeight;
+            }
+            const bPC = order.shippingPostalCode || profile?.postal_code || '';
+            if (bPC) {
+                doc.text(`C.P.: ${bPC}`, margin, yPos); yPos += lineHeight;
+            }
+            const bTown = order.shippingTown || profile?.town || '';
+            if (bTown) {
+                doc.text(`Localidad: ${bTown}`, margin, yPos); yPos += lineHeight;
+            }
             doc.text(`Teléfono: ${profile?.phone || 'N/A'}`, margin, yPos);
 
             // Info Pedido (Columna Derecha - Tabulada)
@@ -225,7 +264,7 @@ export const AdminService = {
             doc.text(order.paymentMethod === 'transfer' ? 'Transferencia' : order.paymentMethod === 'bizum' ? 'Bizum' : 'Al contado', valueX, yPos, { align: 'right' });
 
             // Tabla
-            const products = OrderService.getProducts();
+            const products = PRODUCTS;
             const tableBody = order.items.map(item => {
                 const p = products.find(prod => prod.id === item.id);
                 return [

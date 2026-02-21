@@ -2,36 +2,57 @@
 import { useState, useEffect } from 'react';
 import { AuthService } from '../services/auth.service';
 import { DbAdapter } from '../services/db.adapter';
-import { User, FloppyDisk, DownloadSimple, Key } from 'phosphor-react';
+import { User, FloppyDisk, DownloadSimple, Key, MapTrifold } from 'phosphor-react';
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
+/**
+ * Componente Profile
+ * 
+ * Permite al usuario gestionar su información personal de facturación y
+ * actualizar sus credenciales de seguridad (contraseña).
+ */
 export function Profile() {
+    // --- ESTADO: Datos de facturación ---
     const [formData, setFormData] = useState({
-        name: '',
-        dni: '',
-        address: '',
-        phone: '',
-        email: ''
+        name: '',    // Nombre fiscal o razón social
+        dni: '',     // DNI/CIF para facturación
+        address: '', // Dirección de entrega predeterminada
+        address_2: '',
+        town: '',
+        postal_code: '',
+        phone: '',   // Teléfono de contacto
+        email: ''    // Email (solo lectura, gestionado por Auth)
     });
+
+    // --- ESTADO: Cambio de seguridad ---
     const [passData, setPassData] = useState({
         current: '',
         new: '',
         confirm: ''
     });
-    const [success, setSuccess] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
 
+    const [success, setSuccess] = useState(''); // Mensaje de éxito
+    const [error, setError] = useState('');     // Mensaje de error
+    const [loading, setLoading] = useState(false); // Bloqueo de botones durante la persistencia
+
+    /**
+     * EFECTO: Carga de datos del perfil.
+     * Sincroniza el formulario con la información almacenada en la base de datos.
+     */
     useEffect(() => {
         const loadProfile = async () => {
             const user = AuthService.getCurrentUser();
             if (user) {
-                // Recargar datos frescos del adaptador
+                // Consultamos el adaptador para obtener los campos extendidos (DNI, Dirección, etc.)
                 const freshUser = await DbAdapter.getUserById(user.id);
                 if (freshUser) {
                     setFormData({
                         name: freshUser.full_name || freshUser.name || '',
                         dni: freshUser.dni || '',
                         address: freshUser.address || '',
+                        address_2: freshUser.address_2 || '',
+                        town: freshUser.town || '',
+                        postal_code: freshUser.postal_code || '',
                         phone: freshUser.phone || '',
                         email: freshUser.email || user.email || ''
                     });
@@ -41,61 +62,98 @@ export function Profile() {
         loadProfile();
     }, []);
 
+    // Handlers genéricos para inputs
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleAddressSelect = (addressObj) => {
+        if (addressObj) {
+            setFormData(prev => ({
+                ...prev,
+                address: `${addressObj.street} ${addressObj.houseNumber}`.trim(),
+                town: addressObj.city || '',
+                postal_code: addressObj.postcode || ''
+            }));
+            setError('');
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                address: '',
+                town: '',
+                postal_code: ''
+            }));
+        }
     };
 
     const handlePassChange = (e) => {
         setPassData({ ...passData, [e.target.name]: e.target.value });
     };
 
+    /**
+     * Persiste los cambios del perfil en Supabase/LocalStorage.
+     */
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setSuccess('');
+
+        if (!formData.address || !formData.town) {
+            setError('Debes seleccionar una dirección válida en el mapa usando el buscador.');
+            return;
+        }
+
         setLoading(true);
 
         try {
             const user = AuthService.getCurrentUser();
 
-            // Actualizar Perfil
+            // Sincronizamos con el adaptador
             await DbAdapter.updateUser(user.id, {
                 name: formData.name,
                 dni: formData.dni,
                 address: formData.address,
+                address_2: formData.address_2,
+                town: formData.town,
+                postal_code: formData.postal_code,
                 phone: formData.phone
             });
 
-            setSuccess('Datos de perfil actualizados.');
+            setSuccess('Datos de perfil actualizados correctamente.');
         } catch (err) {
-            setError('Error al actualizar perfil: ' + err.message);
+            setError('Error al actualizar el perfil: ' + err.message);
         } finally {
             setLoading(false);
         }
     };
 
+    /**
+     * Gestiona el cambio de contraseña.
+     * @important Utiliza la API de Auth de Supabase a través del DbAdapter.
+     */
     const handlePasswordSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setSuccess('');
 
+        // Validaciones básicas de seguridad en cliente
         if (passData.new !== passData.confirm) {
-            setError('Las contraseñas nuevas no coinciden');
+            setError('Las nuevas contraseñas no coinciden entre sí.');
             return;
         }
 
         if (passData.new.length < 6) {
-            setError('La contraseña es muy corta');
+            setError('La contraseña debe tener al menos 6 caracteres.');
             return;
         }
 
         setLoading(true);
         try {
             await DbAdapter.updatePassword(passData.new);
-            setSuccess('Contraseña actualizada correctamente.');
-            setPassData({ current: '', new: '', confirm: '' });
+            setSuccess('Tu contraseña ha sido actualizada con éxito.');
+            setPassData({ current: '', new: '', confirm: '' }); // Reseteamos el formulario
         } catch (err) {
-            setError('Error al cambiar contraseña: ' + err.message);
+            setError('Error al cambiar la contraseña: ' + err.message);
         } finally {
             setLoading(false);
         }
@@ -130,8 +188,35 @@ export function Profile() {
                         </div>
 
                         <div>
-                            <label htmlFor="pf-address" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dirección</label>
-                            <input type="text" id="pf-address" name="address" value={formData.address} onChange={handleChange} />
+                            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                                <MapTrifold size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                                Dirección Principal (Buscador Automático)
+                            </label>
+                            {/* Wait for initial load to render AddressAutocomplete correctly if we have data */}
+                            {formData.email !== '' && (
+                                <AddressAutocomplete
+                                    initialValue={formData.address}
+                                    onSelect={handleAddressSelect}
+                                    required={true}
+                                />
+                            )}
+                            <small style={{ color: 'var(--color-text-secondary)', display: 'block', margin: '0.25rem 0 1rem' }}>Escribe tu calle y elige en el desplegable para validar.</small>
+                        </div>
+
+                        <div>
+                            <label htmlFor="pf-address-2" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Detalles (Piso, Puerta, Nave...)</label>
+                            <input type="text" id="pf-address-2" name="address_2" value={formData.address_2} onChange={handleChange} placeholder="Opcional" />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                            <div>
+                                <label htmlFor="pf-town" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Población (Auto)</label>
+                                <input type="text" id="pf-town" name="town" value={formData.town} readOnly style={{ background: 'rgba(0,0,0,0.1)', cursor: 'not-allowed', color: 'var(--color-text-secondary)' }} />
+                            </div>
+                            <div>
+                                <label htmlFor="pf-pc" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>C. Postal (Auto)</label>
+                                <input type="text" id="pf-pc" name="postal_code" value={formData.postal_code} readOnly style={{ background: 'rgba(0,0,0,0.1)', cursor: 'not-allowed', color: 'var(--color-text-secondary)' }} />
+                            </div>
                         </div>
 
                         <div>

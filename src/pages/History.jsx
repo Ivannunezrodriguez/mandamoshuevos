@@ -9,32 +9,54 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../styles/calendar-custom.css'; // Custom styles for dark mode
 
+/**
+ * Componente History
+ * 
+ * Muestra el historial de pedidos del usuario en dos formatos:
+ * 1. Lista detallada con estados y opciones de factura.
+ * 2. Calendario visual de entregas programadas.
+ */
 export function History() {
-    const [orders, setOrders] = useState([]);
-    const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
+    const [orders, setOrders] = useState([]);      // Lista de pedidos recuperados
+    const [viewMode, setViewMode] = useState('list'); // Control de vista: 'list' | 'calendar'
     const navigate = useNavigate();
-    const user = AuthService.getCurrentUser();
+    const user = AuthService.getCurrentUser(); // Usuario de la sesión actual
 
+    /**
+     * EFECTO: Obtención de datos históricos.
+     * Carga todos los pedidos vinculados al UUID del usuario.
+     * @important Se utiliza estrictamente user.id para cumplir con la integridad referencial.
+     */
     useEffect(() => {
         if (user) {
             const fetchOrders = async () => {
-                // FIX: Usar email como prioridad para coincidir con NewOrder.jsx
-                const data = await OrderService.getUserOrders(user.id || user.email || user.username);
+                // El DbAdapter se encarga de filtrar por RLS en Supabase
+                const data = await OrderService.getUserOrders(user.id);
                 setOrders(data);
             };
             fetchOrders();
         }
-    }, [user]);
+    }, [user?.id]);
 
+
+    /**
+     * Permite al usuario volver a comprar los mismos productos de un pedido pasado.
+     * Redirige a NewOrder inyectando el carrito inicial en el estado de navegación.
+     */
     const handleRepeatOrder = (order) => {
         navigate('/new-order', { state: { initialCart: order.items, isRecurring: true } });
     };
 
+    /**
+     * Genera un PDF de factura para el pedido seleccionado.
+     */
     const handleViewInvoice = (order) => {
         InvoiceService.generateInvoice(order, user);
     };
 
-    // Calendar helper: find orders on a date
+    /**
+     * Helper para el calendario: Filtra pedidos que coincidan exactamente con un día.
+     */
     const getOrdersForDate = (date) => {
         return orders.filter(o => {
             const d = new Date(o.deliveryDate);

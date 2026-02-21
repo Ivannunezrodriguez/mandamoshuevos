@@ -3,6 +3,10 @@ import { Egg, CookingPot, Heartbeat, Article, Calendar, ArrowLeft } from 'phosph
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+/**
+ * Base de Datos Estática de Artículos (Legacy/Simulada)
+ * En una fase futura, esto podría migrarse a una tabla 'posts' en Supabase.
+ */
 const POSTS_POOL = [
     {
         id: 1,
@@ -106,14 +110,23 @@ const POSTS_POOL = [
     }
 ];
 
+/**
+ * Componente Blog
+ * 
+ * Gestiona la visualización de artículos informativos y recetas.
+ * Utiliza parámetros de búsqueda (URL Search Params) para determinar si mostrar
+ * el listado general o un artículo específico.
+ */
 export function Blog() {
     const [searchParams, setSearchParams] = useSearchParams();
-    const postId = searchParams.get('post');
+    const postId = searchParams.get('post'); // ID del artículo seleccionado vía URL
 
+    // Memorizamos el listado para evitar re-calculos innecesarios
     const weeklyPosts = useMemo(() => {
         return POSTS_POOL;
     }, []);
 
+    // Busca el objeto del post si hay un ID activo en la URL
     const selectedPost = useMemo(() => {
         if (!postId) return null;
         return weeklyPosts.find(p => p.id === parseInt(postId));

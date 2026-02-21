@@ -1,18 +1,23 @@
-
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
-// Claves de LocalStorage
-const USERS_KEY = 'mandamoshuevos_users';
-const ORDERS_KEY = 'mandamoshuevos_orders';
+// Nombres de las claves para almacenamiento local (Fallback)
+const USERS_KEY = 'mh_users';
+const ORDERS_KEY = 'mh_orders';
+const INVENTORY_KEY = 'mh_inventory';
 const CURRENT_USER_KEY = 'mandamoshuevos_current_user';
 
+/**
+ * ADAPTADOR DE BASE DE DATOS (DbAdapter)
+ * 
+ * Este es el corazón de la persistencia de Mandahuevos. 
+ * Implementa un patrón "Híbrido/Fallback":
+ * 1. Si Supabase está configurado (.env con claves válidas), usa la base de datos real en la nube.
+ * 2. Si no, usa LocalStorage para que la aplicación sea funcional en modo demo o desarrollo offline.
+ */
 export const DbAdapter = {
     // --- AUTENTICACIÓN Y USUARIOS ---
 
-    // Autenticar (Login)
     authenticate: async (email, password) => {
-        // ADMIN MOCK BYPASS (Solo en modo local pto)
-        // Si estamos en Supabase, queremos login REAL para tener token válido
         if (!isSupabaseConfigured() && email === 'GranHuevon' && password === 'Huevosde0R0.COM') {
             return { id: 'admin-id', name: 'Gran Huevón', email: 'GranHuevon', role: 'admin' };
         }
@@ -25,28 +30,27 @@ export const DbAdapter = {
 
             if (error) throw error;
 
-            // Obtener perfil completo
             let { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', data.user.id)
                 .single();
 
-            // AUTORECUPERACIÓN: Si el perfil no existe (usuario antiguo o fallo de trigger), crearlo ahora.
             if (profileError || !profile) {
-                console.warn("Perfil no encontrado, intentando autorecuperación...", profileError);
                 const newProfile = {
                     id: data.user.id,
                     email: data.user.email,
                     role: 'user',
                     full_name: data.user.user_metadata?.full_name || '',
                     address: data.user.user_metadata?.address || '',
+                    address_2: data.user.user_metadata?.address_2 || '',
+                    town: data.user.user_metadata?.town || '',
+                    postal_code: data.user.user_metadata?.postal_code || '',
                     dni: data.user.user_metadata?.dni || '',
                     phone: data.user.user_metadata?.phone || '',
                     updated_at: new Date().toISOString()
                 };
 
-                // Intentar insertar
                 const { data: createdProfile, error: createError } = await supabase
                     .from('profiles')
                     .upsert(newProfile)
@@ -56,8 +60,6 @@ export const DbAdapter = {
                 if (!createError) {
                     profile = createdProfile;
                 } else {
-                    // Si falla la creación, seguimos solo con los datos básicos de Auth para no bloquear el login
-                    console.error("Fallo al autorecuperar perfil:", createError);
                     profile = { id: data.user.id, email: data.user.email, role: 'user' };
                 }
             }
@@ -69,21 +71,14 @@ export const DbAdapter = {
             };
 
         } else {
-            // MODO LOCAL
             const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
             const user = users.find(u => u.email === email && u.password === password);
-
-            if (!user && email === 'test@demo.com' && password === 'test') {
-                return { id: 'test-id', name: 'Usuario Prueba', email: 'test@demo.com', role: 'user' };
-            }
             return user || null;
         }
     },
 
-    // Crear Usuario (Registro)
     createUser: async (userData) => {
         if (isSupabaseConfigured()) {
-            // 1. Registrar en Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email: userData.email,
                 password: userData.password,
@@ -91,6 +86,9 @@ export const DbAdapter = {
                     data: {
                         full_name: userData.name || userData.full_name,
                         address: userData.address,
+                        address_2: userData.address_2,
+                        town: userData.town,
+                        postal_code: userData.postal_code,
                         dni: userData.dni,
                         phone: userData.phone
                     }
@@ -99,20 +97,17 @@ export const DbAdapter = {
 
             if (authError) throw authError;
 
-            if (!authData.user) {
-                throw new Error('No se pudo crear el usuario. Verifica tu email si es necesario.');
-            }
-
-            // 2. Crear o Actualizar Perfil en tabla 'profiles'
-            // Usamos UPSERT para que funcione tanto si el Trigger corrió (update) como si no (insert)
             const profileData = {
                 id: authData.user.id,
                 full_name: userData.name || userData.full_name,
                 address: userData.address,
+                address_2: userData.address_2,
+                town: userData.town,
+                postal_code: userData.postal_code,
                 dni: userData.dni,
                 phone: userData.phone,
                 email: userData.email,
-                role: 'user', // Siempre user por defecto al registrarse
+                role: 'user',
                 updated_at: new Date().toISOString()
             };
 
@@ -122,15 +117,10 @@ export const DbAdapter = {
                 .select()
                 .single();
 
-            if (profileError) {
-                console.error('Error creando/actualizando perfil:', profileError);
-                // No lanzamos error fatal si ya existe el usuario en Auth, intentamos recuperar
-            }
+            if (profileError) console.error('Error creando perfil:', profileError);
 
             return { ...profile, email: userData.email };
-
         } else {
-            // MODO LOCAL
             const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
             users.push(userData);
             localStorage.setItem(USERS_KEY, JSON.stringify(users));
@@ -138,30 +128,21 @@ export const DbAdapter = {
         }
     },
 
-    // Obtener todos los perfiles (Admin)
     getAllProfiles: async () => {
         if (isSupabaseConfigured()) {
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
-                .order('full_name', { ascending: true }); // Fallback to name sort as updated_at might be missing
-            // .order('updated_at', { ascending: false, nullsFirst: false }); 
-            if (error) {
-                console.error("Error fetching profiles:", error);
-                return [];
-            }
-            return data;
+                .order('full_name', { ascending: true });
+            return error ? [] : data;
         } else {
             return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
         }
     },
 
-    // Obtener usuario por ID
     getUserById: async (userId) => {
         if (isSupabaseConfigured()) {
             let query = supabase.from('profiles').select('*');
-
-            // Detectar si userId es un email (contiene '@') o un UUID
             if (userId && userId.includes('@')) {
                 query = query.eq('email', userId);
             } else {
@@ -169,11 +150,7 @@ export const DbAdapter = {
             }
 
             const { data, error } = await query.single();
-            if (error) {
-                console.warn("Error fetching user profile:", error);
-                return null;
-            }
-            return data;
+            return error ? null : data;
         } else {
             const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
             return users.find(u => u.id === userId || u.email === userId) || null;
@@ -182,7 +159,6 @@ export const DbAdapter = {
 
     updateUser: async (userId, updates) => {
         if (isSupabaseConfigured()) {
-            // Limpieza: Supabase usa 'full_name', no 'name'
             const cleanUpdates = { ...updates };
             if (cleanUpdates.name) {
                 if (!cleanUpdates.full_name) cleanUpdates.full_name = cleanUpdates.name;
@@ -224,7 +200,6 @@ export const DbAdapter = {
             if (updateError) throw updateError;
             return data;
         } else {
-            // Local mode support
             const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
             const index = users.findIndex(u => u.id === userId || u.email === userId);
             if (index !== -1) {
@@ -237,9 +212,9 @@ export const DbAdapter = {
     },
 
     // --- PEDIDOS ---
+
     createOrder: async (orderData) => {
         if (isSupabaseConfigured()) {
-            // Insertar cabecera pedido
             const { data: order, error: orderError } = await supabase
                 .from('orders')
                 .insert([{
@@ -250,18 +225,19 @@ export const DbAdapter = {
                     status: 'pending',
                     invoice_number: orderData.invoiceNumber || `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`,
                     shipping_address: orderData.shippingAddress,
+                    shipping_address_2: orderData.shippingAddress2,
                     shipping_town: orderData.shippingTown,
-                    is_recurring: orderData.isRecurring || false // NEW: Recurring Flag
+                    shipping_postal_code: orderData.shippingPostalCode,
+                    is_recurring: orderData.isRecurring || false
                 }])
                 .select()
                 .single();
 
             if (orderError) throw orderError;
 
-            // Insertar items
             const items = orderData.items.map(item => ({
                 order_id: order.id,
-                product_id: item.id || item.productId, // Manejar ambas estructuras
+                product_id: item.id || item.productId,
                 quantity: item.quantity,
                 price_at_purchase: item.price
             }));
@@ -273,7 +249,6 @@ export const DbAdapter = {
             if (itemsError) throw itemsError;
 
             return { ...order, items: orderData.items };
-
         } else {
             const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
             const newOrder = {
@@ -294,15 +269,14 @@ export const DbAdapter = {
         if (isSupabaseConfigured()) {
             const { data: orders, error } = await supabase
                 .from('orders')
-                .select(`
-                    id, created_at, total, status, delivery_date, payment_method, invoice_number,
-                    shipping_address, shipping_town, is_recurring,
-                    order_items ( product_id, quantity, price_at_purchase )
-                `)
+                .select('id,created_at,total,status,delivery_date,payment_method,invoice_number,shipping_address,shipping_town,is_recurring,order_items(product_id,quantity,price_at_purchase)')
                 .eq('user_id_ref', userId)
                 .order('created_at', { ascending: false });
 
-            if (error) return [];
+            if (error) {
+                console.error('Error obteniendo pedidos del usuario:', error);
+                return [];
+            }
 
             return orders.map(o => ({
                 id: o.id,
@@ -311,28 +285,21 @@ export const DbAdapter = {
                 status: o.status,
                 deliveryDate: o.delivery_date,
                 paymentMethod: o.payment_method,
-                invoiceNumber: o.invoice_number || `INV-${new Date(o.created_at).getFullYear()}-${o.id.slice(0, 4)}`,
+                invoiceNumber: o.invoice_number,
                 shippingAddress: o.shipping_address,
                 shippingTown: o.shipping_town,
                 isRecurring: o.is_recurring,
-                items: o.order_items.map(i => ({
+                items: (o.order_items || []).map(i => ({
                     id: i.product_id,
-                    name: `Producto ${i.product_id}`, // Mejorar si products disponibles
+                    name: `Producto ${i.product_id}`,
                     price: i.price_at_purchase,
                     quantity: i.quantity
                 }))
             }));
-
         } else {
             const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
             return orders.filter(o => o.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         }
-    },
-
-    // Método auxiliar para lógica de sugerencias
-    getRecurringSuggestion: async () => {
-        // ... Logica simple o compleja, por ahora simplificada ...
-        return null;
     },
 
     getGlobalStats: async () => {
@@ -340,36 +307,26 @@ export const DbAdapter = {
             const { data, error } = await supabase
                 .from('order_items')
                 .select('quantity, product_id');
-
-            if (error) return { totalEggs: 0 };
-
-            // Importar PRODUCTS dinamicamente o pasarlos? Mejor usar una constante local o hardcoded para evitar dependencias circulares si DbAdapter es base
-            // Como PRODUCTS está en order.service, y OrderService usa DbAdapter, hay riesgo.
-            // Para simplicidad, asumo que el componente que llama pasará el catálogo o haré un cálculo genérico.
-            // Pero aquí necesito saber cuántos huevos por producto hay.
-            return data; // Devuelvo los datos crudos para que el componente calcule
+            return error ? [] : data;
         } else {
             const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
-            const allItems = orders.flatMap(o => o.items);
-            return allItems;
+            return orders.flatMap(o => o.items);
         }
     },
+
     // --- ADMINISTRACIÓN ---
 
-    // Obtener todos los pedidos del sistema (Solo Admin)
     getAllOrders: async () => {
         if (isSupabaseConfigured()) {
             const { data: orders, error } = await supabase
                 .from('orders')
-                .select(`
-                    id, created_at, total, status, delivery_date, payment_method, invoice_number, user_id_ref,
-                    shipping_address, shipping_town, is_recurring,
-                    profiles ( email ),
-                    order_items ( product_id, quantity, price_at_purchase )
-                `)
+                .select('id,created_at,total,status,delivery_date,payment_method,invoice_number,user_id_ref,shipping_address,shipping_town,is_recurring,profiles(email),order_items(product_id,quantity,price_at_purchase)')
                 .order('created_at', { ascending: false });
 
-            if (error) throw error;
+            if (error) {
+                console.error('Error obteniendo todos los pedidos:', error);
+                throw error;
+            }
 
             return orders.map(o => ({
                 id: o.id,
@@ -383,18 +340,18 @@ export const DbAdapter = {
                 shippingAddress: o.shipping_address,
                 shippingTown: o.shipping_town,
                 isRecurring: o.is_recurring,
-                items: o.order_items.map(i => ({
+                items: (o.order_items || []).map(i => ({
                     id: i.product_id,
                     price: i.price_at_purchase,
                     quantity: i.quantity
                 }))
             }));
         } else {
-            return JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]').sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
+            return orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         }
     },
 
-    // Actualizar estado de un pedido
     updateOrderStatus: async (orderId, newStatus) => {
         if (isSupabaseConfigured()) {
             const { data, error } = await supabase
@@ -417,36 +374,16 @@ export const DbAdapter = {
         }
     },
 
-    // Eliminar Pedido (Admin)
     deleteOrder: async (orderId) => {
         if (isSupabaseConfigured()) {
-            // Eliminar items primero (cascade debería encargarse, pero por seguridad)
-            const { error: itemsError } = await supabase
-                .from('order_items')
-                .delete()
-                .eq('order_id', orderId);
-
-            if (itemsError) console.warn("Error borrando items:", itemsError);
-
-            const { error } = await supabase
-                .from('orders')
-                .delete()
-                .eq('id', orderId);
-
+            await supabase.from('order_items').delete().eq('order_id', orderId);
+            const { error } = await supabase.from('orders').delete().eq('id', orderId);
             if (error) throw error;
             return true;
         } else {
             const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
-            console.log('Borrando pedido local. ID:', orderId);
-            console.log('Pedidos antes:', orders.length);
             const updatedOrders = orders.filter(o => o.id !== orderId);
-            console.log('Pedidos después:', updatedOrders.length);
             localStorage.setItem(ORDERS_KEY, JSON.stringify(updatedOrders));
-
-            // Verificación inmediata
-            const check = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
-            console.log('Verificación lectura inmediata:', check.length);
-
             return true;
         }
     },
@@ -457,51 +394,27 @@ export const DbAdapter = {
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'pending');
-            if (error) {
-                console.warn("Error counting pending orders:", error);
-                return 0;
-            }
-            return count;
+            return error ? 0 : count;
         } else {
             const orders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]');
             return orders.filter(o => o.status === 'pending').length;
         }
     },
 
-    getLowStockCount: async () => {
-        if (isSupabaseConfigured()) {
-            const { count, error } = await supabase
-                .from('inventory')
-                .select('*', { count: 'exact', head: true })
-                .lt('stock_quantity', 10);
-            if (error) {
-                console.warn("Error counting low stock:", error);
-                return 0;
-            }
-            return count;
-        } else {
-            const inventory = await DbAdapter.getInventory();
-            return inventory.filter(i => i.stock_quantity < 10).length;
-        }
-    },
-
-    // --- INVENTARIO ---
     getInventory: async () => {
         if (isSupabaseConfigured()) {
-            const { data, error } = await supabase
-                .from('inventory')
-                .select('*');
+            const { data, error } = await supabase.from('inventory').select('*');
             if (error) throw error;
             return data;
         } else {
-            const inventory = JSON.parse(localStorage.getItem('mandamoshuevos_inventory') || '[]');
+            let inventory = JSON.parse(localStorage.getItem('mandamoshuevos_inventory') || '[]');
             if (inventory.length === 0) {
-                // Mock inicial local
-                return [
+                inventory = [
                     { product_id: 'carton-xxl', stock_quantity: 100, min_stock_alert: 10 },
                     { product_id: 'carton-l', stock_quantity: 100, min_stock_alert: 10 },
                     { product_id: 'carton-m', stock_quantity: 100, min_stock_alert: 10 }
                 ];
+                localStorage.setItem('mandamoshuevos_inventory', JSON.stringify(inventory));
             }
             return inventory;
         }
@@ -509,7 +422,6 @@ export const DbAdapter = {
 
     updateStock: async (productId, delta) => {
         if (isSupabaseConfigured()) {
-            // Obtener stock actual
             const { data: item } = await supabase
                 .from('inventory')
                 .select('stock_quantity')
@@ -544,7 +456,6 @@ export const DbAdapter = {
             if (error) throw error;
             return true;
         } else {
-            // Modo local: actualizar usuario en array
             const user = JSON.parse(localStorage.getItem(CURRENT_USER_KEY));
             if (user) {
                 const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
@@ -557,6 +468,27 @@ export const DbAdapter = {
             }
             return false;
         }
+    },
+
+    resetPasswordEmail: async (email) => {
+        if (isSupabaseConfigured()) {
+            const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+            if (error) throw error;
+            return true;
+        } else {
+            return true;
+        }
+    },
+
+    getLowStockCount: async () => {
+        if (isSupabaseConfigured()) {
+            const inventory = await DbAdapter.getInventory();
+            return inventory.filter(i => i.stock_quantity <= i.min_stock_alert).length;
+        } else {
+            const inventory = await DbAdapter.getInventory();
+            return inventory.filter(i => i.stock_quantity <= i.min_stock_alert).length;
+        }
     }
 };
-

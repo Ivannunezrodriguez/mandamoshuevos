@@ -2,17 +2,29 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AuthService } from '../services/auth.service';
-import { UserPlus, ShieldCheck, Eye, EyeSlash } from 'phosphor-react';
+import { UserPlus, ShieldCheck, Eye, EyeSlash, MapTrifold } from 'phosphor-react';
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
+/**
+ * Componente Register
+ * 
+ * Permite la creación de nuevas cuentas para clientes profesionales.
+ * Realiza múltiples validaciones en el cliente (DNI, fortaleza de contraseña, GDPR)
+ * antes de registrar al usuario en Supabase AuthService.
+ */
 export function Register() {
+    // --- ESTADO: Formulario multicanal ---
     const [formData, setFormData] = useState({
         email: '',
         password: '',
         dni: '',
         phone: '',
         address: '',
-        name: '',
-        gdprAccepted: false
+        address_2: '',
+        town: '',
+        postal_code: '',
+        name: '',           // Razón social
+        gdprAccepted: false // Consentimiento legal obligatorio
     });
 
     const [showPassword, setShowPassword] = useState(false);
@@ -28,26 +40,54 @@ export function Register() {
         }));
     };
 
+    const handleAddressSelect = (addressObj) => {
+        if (addressObj) {
+            setFormData(prev => ({
+                ...prev,
+                address: `${addressObj.street} ${addressObj.houseNumber}`.trim(),
+                town: addressObj.city || '',
+                postal_code: addressObj.postcode || ''
+            }));
+            setError('');
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                address: '',
+                town: '',
+                postal_code: ''
+            }));
+        }
+    };
+
+    /**
+     * Procesa el alta de nuevo usuario.
+     */
     const handleRegister = async (e) => {
         e.preventDefault();
+
+        // --- VALIDACIONES DE NEGOCIO Y LEGALES ---
         if (!formData.gdprAccepted) {
-            setError('Debes aceptar la política de privacidad');
+            setError('Debes aceptar la política de privacidad para continuar.');
             return;
         }
 
-        // Validar DNI/CIF (Regex simple para formato español aproximado)
+        if (!formData.address || !formData.town) {
+            setError('Debes seleccionar una dirección válida sugerida por el buscador.');
+            return;
+        }
+
+        // Validación de DNI/CIF (Regex español estándar)
         const dniRegex = /^[XYZ]?[0-9]{7,8}[A-Z]$|^[A-Z][0-9]{8}$|^[A-Z][0-9]{7}[A-Z0-9]$/i;
         if (!dniRegex.test(formData.dni)) {
-            setError('El DNI/CIF no tiene un formato válido.');
+            setError('El DNI/CIF introducido no tiene un formato válido.');
             return;
         }
 
-        // Validar Contraseña (Mínimo 8 caracteres, letras, números y especial)
-        // Validar Contraseña (Mínimo 8 caracteres, letras, números y especial)
-        // Se permite cualquier caracter especial
+        // Validación de Fortaleza de Contraseña
+        // Requiere: 8 caracteres, al menos una letra, un número y un símbolo
         const passRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[\W_])[A-Za-z\d\W_]{8,}$/;
         if (!passRegex.test(formData.password)) {
-            setError('La contraseña debe tener al menos 8 caracteres, incluir letras, números y algún carácter especial.');
+            setError('La contraseña es demasiado débil. Usa al menos 8 caracteres, incluyendo letras, números y símbolos.');
             return;
         }
 
@@ -55,24 +95,23 @@ export function Register() {
         setLoading(true);
 
         try {
+            // El servicio registra en Auth y crea el perfil en la tabla 'profiles'
             await AuthService.register(formData);
             navigate('/');
         } catch (err) {
-            console.error("Registration error:", err);
-            let msg = 'Error desconocido al registrarse. Por favor, inténtalo de nuevo.';
+            console.error("Error en registro:", err);
+            let msg = 'Error desconocido al registrarse. Revisa tu conexión.';
 
-            // Mensaje original para debug
             const rawMsg = err.message || '';
 
+            // Mapeo detallado de errores de Supabase Auth
             if (rawMsg.includes('User already registered') || rawMsg.includes('email already exists')) {
-                msg = 'Este usuario ya está registrado. Por favor, inicia sesión.';
+                msg = 'Este email ya está en uso. Por favor, inicia sesión.';
             } else if (rawMsg.includes('Password should be')) {
-                msg = 'La contraseña es demasiado débil (mínimo 6 caracteres).';
-            } else if (rawMsg.includes('Database error') || rawMsg.includes('saving new user')) {
-                // Capturamos el error específico del usuario
-                msg = 'Error al guardar el usuario en la base de datos. Verifica si el email es válido.';
+                msg = 'La contraseña no cumple con los requisitos del servidor de seguridad.';
+            } else if (rawMsg.includes('Database error')) {
+                msg = 'Error de base de datos al guardar el perfil. Inténtalo de nuevo.';
             } else if (rawMsg) {
-                // Fallback para otros errores, intentamos traducir o mostrar genérico
                 msg = `Error: ${rawMsg}`;
             }
 
@@ -145,12 +184,45 @@ export function Register() {
                     </div>
 
                     <div style={{ gridColumn: 'span 2' }}>
-                        <label htmlFor="address" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Dirección de Facturación</label>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 'bold' }}>
+                            <MapTrifold size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                            Dirección Principal (Buscador Automático)
+                        </label>
+                        <AddressAutocomplete
+                            initialValue={formData.address}
+                            onSelect={handleAddressSelect}
+                            required={true}
+                        />
+                        <small style={{ color: 'var(--color-text-secondary)', display: 'block', marginTop: '0.25rem' }}>Escribe calle y número, y pincha en la opción correcta del desplegable para rellenar los datos.</small>
+                    </div>
+
+                    <div style={{ gridColumn: 'span 2' }}>
+                        <label htmlFor="address_2" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem' }}>Detalles (Piso, Puerta, Escalera...) - Opcional</label>
                         <input
-                            type="text" name="address" id="address"
-                            value={formData.address} onChange={handleChange}
-                            placeholder="C/ Ejemplo, 12, 28000 Madrid" required
+                            type="text" name="address_2" id="address_2"
+                            value={formData.address_2} onChange={handleChange}
+                            placeholder="Piso 3, Puerta B, Nave 4..."
                             style={inputStyle}
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="town" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Población (Autocompletado)</label>
+                        <input
+                            type="text" name="town" id="town"
+                            value={formData.town} readOnly
+                            placeholder="Autocompletado al elegir dirección" required
+                            style={{ ...inputStyle, background: 'rgba(0,0,0,0.1)', cursor: 'not-allowed', color: 'var(--color-text-secondary)' }}
+                        />
+                    </div>
+
+                    <div>
+                        <label htmlFor="postal_code" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>Código Postal (Autocompletado)</label>
+                        <input
+                            type="text" name="postal_code" id="postal_code"
+                            value={formData.postal_code} readOnly
+                            placeholder="Autocompletado" required
+                            style={{ ...inputStyle, background: 'rgba(0,0,0,0.1)', cursor: 'not-allowed', color: 'var(--color-text-secondary)' }}
                         />
                     </div>
 

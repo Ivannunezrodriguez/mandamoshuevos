@@ -1,18 +1,30 @@
-
-import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { isSupabaseConfigured } from '../lib/supabase';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, Outlet } from 'react-router-dom';
+import { ShoppingCart, Receipt, Browsers, Phone, User, SignOut, List, X, ShieldCheck, Sun, Moon, Egg } from 'phosphor-react';
 import { AuthService } from '../services/auth.service';
 import { DbAdapter } from '../services/db.adapter';
-import { SignOut, Egg, Receipt, ShoppingCart, Browsers, User, Phone, Sun, Moon, ShieldCheck, List, X } from 'phosphor-react';
-import { useState, useEffect } from 'react';
+import { isSupabaseConfigured } from '../lib/supabase';
 
+/**
+ * COMPONENTE DE DISEÑO PRINCIPAL (Layout)
+ * 
+ * Este componente actúa como el "cascarón" de toda la aplicación.
+ * Gestiona el menú lateral (sidebar), la navegación móvil, el tema (claro/oscuro)
+ * y la verificación de sesión del usuario.
+ */
 export function Layout() {
     const navigate = useNavigate();
-    const [user, setUser] = useState(null);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [adminPendingCount, setAdminPendingCount] = useState(0);
-    const [isDark, setIsDark] = useState(!document.body.classList.contains('light-theme'));
 
+    // ESTADO LOCAL
+    const [user, setUser] = useState(null); // Usuario logueado actualmente
+    const [isMenuOpen, setIsMenuOpen] = useState(false); // Estado del menú móvil (abierto/cerrado)
+    const [adminPendingCount, setAdminPendingCount] = useState(0); // Contador de pedidos pendientes (solo para admins)
+    const [isDark, setIsDark] = useState(!document.body.classList.contains('light-theme')); // Estado del tema visual
+
+    /**
+     * Alterna entre el tema claro y oscuro.
+     * Modifica las clases del 'body' para que el CSS aplique los colores correspondientes.
+     */
     const toggleTheme = () => {
         const newIsDark = !isDark;
         setIsDark(newIsDark);
@@ -23,13 +35,19 @@ export function Layout() {
         }
     };
 
+    /**
+     * EFECTO DE INICIALIZACIÓN
+     * Verifica si hay un usuario logueado al cargar el componente.
+     * Si no hay sesión, redirige al login.
+     */
     useEffect(() => {
         const currentUser = AuthService.getCurrentUser();
         if (!currentUser) {
             navigate('/login');
         } else {
             setUser(currentUser);
-            // Si es admin, obtener contador de notificaciones (Pendientes + Stock Bajo)
+
+            // Si el usuario es administrador, cargamos los contadores de notificaciones
             if (currentUser.role === 'admin') {
                 const updateCounts = async () => {
                     const [pending, lowStock] = await Promise.all([
@@ -40,12 +58,12 @@ export function Layout() {
                 };
 
                 updateCounts();
-                // Opcional: Polling simple cada 30s
+                // Actualizamos cada 30 segundos automáticamente
                 const interval = setInterval(updateCounts, 30000);
                 return () => clearInterval(interval);
             }
         }
-    }, [navigate]); // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navigate]);
 
     const handleLogout = () => {
         AuthService.logout();
@@ -69,7 +87,7 @@ export function Layout() {
                         .desktop-nav { display: none !important; }
                         .mobile-burger { display: block !important; }
                         .mobile-menu-dropdown { 
-                            display: flex; flexDirection: column; gap: 0.5rem;
+                            display: flex; flex-direction: column; gap: 0.5rem;
                         }
                     }
                     @media (min-width: 769px) {
@@ -162,7 +180,7 @@ export function Layout() {
                             position: 'absolute',
                             top: '100%',
                             right: 0,
-                            width: '220px',
+                            width: '240px',
                             background: 'var(--color-bg-secondary)', // Solid bg for readability
                             border: '1px solid var(--color-border)',
                             borderRadius: '8px',

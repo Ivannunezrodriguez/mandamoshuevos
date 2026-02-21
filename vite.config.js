@@ -5,4 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ command }) => ({
   plugins: [react()],
   base: '/', // En Vercel (y Netlify), usamos la raíz.
+  server: {
+    port: 5173,
+    strictPort: true
+  }
 }))

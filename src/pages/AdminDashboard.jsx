@@ -1,9 +1,10 @@
-
 import { useState, useEffect, useMemo } from 'react';
 import { DbAdapter } from '../services/db.adapter';
+import { DeliveryRouteMap } from '../components/DeliveryRouteMap';
 import { isSupabaseConfigured } from '../lib/supabase'; // Import missing function
 import { AdminService } from '../services/admin.service';
 import { OrderService } from '../services/order.service';
+import { PRODUCTS } from '../services/catalog.service';
 import {
     Package,
     Truck,
@@ -23,23 +24,34 @@ import {
     Envelope,
     Funnel,
     Trash,
-    ArrowCounterClockwise // NEW: Recurring Icon
+    ArrowCounterClockwise, // NEW: Recurring Icon
+    MapTrifold // NEW: MapTrifold icon
 } from 'phosphor-react';
 
 import { useNavigate } from 'react-router-dom';
 import { AuthService } from '../services/auth.service';
 
+/**
+ * AdminDashboard - Panel de Control Principal
+ * 
+ * Esta página es el centro neurálgico para Ivan (admin). Permite gestionar pedidos,
+ * controlar el inventario en tiempo real, ver estadísticas de venta y gestionar
+ * descuentos personalizados para los clientes.
+ */
 export function AdminDashboard() {
-    const [orders, setOrders] = useState([]);
-    const [inventory, setInventory] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('orders'); // 'orders', 'inventory', 'stats', 'users'
-    const [expandedOrder, setExpandedOrder] = useState(null);
-    const [selectedOrders, setSelectedOrders] = useState(new Set());
-    const [errorMsg, setErrorMsg] = useState(null); // Capture errors
+    // ESTADOS: Datos principales
+    const [orders, setOrders] = useState([]);      // Lista global de pedidos
+    const [inventory, setInventory] = useState([]);   // Stock actual de productos
+    const [users, setUsers] = useState([]);       // Perfiles de clientes registrados
+    const [loading, setLoading] = useState(true);   // Indicador de carga inicial
+    const [activeTab, setActiveTab] = useState('orders'); // Navegación interna (pedidos, stock, etc.)
 
-    // Filters
+    // ESTADOS: UI y Filtros
+    const [expandedOrder, setExpandedOrder] = useState(null); // ID del pedido que se está visualizando al detalle
+    const [selectedOrders, setSelectedOrders] = useState(new Set()); // Para acciones en lote (descarga masiva)
+    const [errorMsg, setErrorMsg] = useState(null); // Almacena errores detectados (ej. fallo de red o RLS)
+
+    // Filtros de Búsqueda
     const [filterText, setFilterText] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [userFilterText, setUserFilterText] = useState('');
@@ -48,34 +60,41 @@ export function AdminDashboard() {
 
 
 
+    /**
+     * Seguridad: Verifica que el usuario tenga rol 'admin' antes de cargar nada.
+     */
     const checkAdminAndLoad = async () => {
         const user = AuthService.getCurrentUser();
         if (!user || user.role !== 'admin') {
-            console.warn('Acceso denegado');
+            console.warn('Acceso denegado: Se requiere rol de administrador');
             navigate('/');
             return;
         }
         await loadData();
     };
 
+    /**
+     * Carga masiva de datos desde el DbAdapter.
+     * Recupera pedidos, inventario y perfiles en paralelo para optimizar tiempo.
+     */
     const loadData = async () => {
         try {
             setLoading(true);
-            setErrorMsg(null); // Clear previous errors
+            setErrorMsg(null);
             const [ordersData, inventoryData, profilesData] = await Promise.all([
                 DbAdapter.getAllOrders(),
                 DbAdapter.getInventory(),
                 DbAdapter.getAllProfiles()
             ]);
 
-            // Sort Inventory by ID to prevent jumping
+            // Ordenamos el inventario por ID para que la lista sea estable y no "salte"
             const sortedInventory = [...inventoryData].sort((a, b) => a.product_id.localeCompare(b.product_id));
 
             setOrders(ordersData);
             setInventory(sortedInventory);
             setUsers(profilesData);
         } catch (error) {
-            console.error('Error loading admin data:', error);
+            console.error('Error crítico cargando datos de administración:', error);
             setErrorMsg(error.message || "Error desconocido al cargar datos");
         } finally {
             setLoading(false);
@@ -86,7 +105,7 @@ export function AdminDashboard() {
         checkAdminAndLoad();
     }, []);
 
-    // --- LOGIC: ORDERS ---
+    // --- LÓGICA: PEDIDOS ---
 
     const filteredOrders = useMemo(() => {
         return orders.filter(order => {
@@ -112,16 +131,20 @@ export function AdminDashboard() {
         });
     }, [users, userFilterText]);
 
+    /**
+     * Actualiza el estado de un pedido (ej: de Pendiente a Confirmado).
+     * @important Cuando se CONFIRMA un pedido, se descuenta automáticamente el stock correspondiente.
+     */
     const handleStatusUpdate = async (orderId, newStatus) => {
-        // if (!window.confirm('¿Confirmar cambio de estado?')) return;
         try {
-            // LOGICA DE INVENTARIO: Si confirmamos pedido, restamos stock
+            // LÓGICA DE ACTUALIZACIÓN DE STOCK (Solo al pasar a 'confirmed')
             if (newStatus === 'confirmed') {
                 const order = orders.find(o => o.id === orderId);
                 if (order) {
-                    console.log("Restando stock para pedido:", order.id);
+                    console.log("Calculando deducción de stock para pedido:", order.id);
 
-                    // MAPA DE DESCOMPOSICIÓN DE OFERTAS
+                    // Mapeo detallado de cómo cada producto afecta al inventario de cartones base.
+                    // Esto permite que las "Ofertas de 3" resten 3 unidades del stock real.
                     const PRODUCT_MAPPING = {
                         'oferta-3-xxl': { base: 'carton-xxl', qty: 3 },
                         'oferta-3-l': { base: 'carton-l', qty: 3 },
@@ -132,71 +155,79 @@ export function AdminDashboard() {
                         'pack-12-xxl': { base: 'carton-xxl', qty: 12 },
                         'pack-12-l': { base: 'carton-l', qty: 12 },
                         'pack-12-m': { base: 'carton-m', qty: 12 },
-                        // Base products map to themselves x1
                         'carton-xxl': { base: 'carton-xxl', qty: 1 },
                         'carton-l': { base: 'carton-l', qty: 1 },
                         'carton-m': { base: 'carton-m', qty: 1 }
                     };
 
-                    // Ejecutar actualizaciones
                     const updates = [];
                     for (const item of order.items) {
                         const mapping = PRODUCT_MAPPING[item.id];
                         if (mapping) {
-                            // Si es una oferta/pack, restamos X veces la cantidad del item
-                            // Ejemplo: 2 Packs de 6 XXL = 2 * 6 = 12 cartones XXL restados
+                            // Deducción: Cantidad del pedido * multiplicador de la oferta
                             const totalToDeduct = item.quantity * mapping.qty;
                             updates.push(DbAdapter.updateStock(mapping.base, -totalToDeduct));
                         } else {
-                            // Fallback por si acaso (items desconocidos)
-                            console.warn("Producto sin mapeo de stock:", item.id);
+                            console.warn("Se detectó un producto sin regla de inventario definida:", item.id);
                         }
                     }
                     await Promise.all(updates);
                 }
             }
 
+            // Guardamos el nuevo estado en la DB
             await DbAdapter.updateOrderStatus(orderId, newStatus);
-            await loadData(); // Recargar todo (incluido inventario actualizado)
+            await loadData(); // Recargamos para ver los cambios de stock y estado reflejados
         } catch (error) {
-            console.error("Error updating status:", error);
+            console.error("Error al actualizar estado del pedido:", error);
             alert('Error al actualizar estado: ' + error.message);
         }
     };
 
+    /**
+     * Aplica un descuento personalizado a un usuario y lo persiste en su perfil.
+     */
     const handleUpdateDiscount = async (userId, newDiscount) => {
         const val = parseInt(newDiscount, 10);
         if (isNaN(val) || val < 0) return;
         try {
             await DbAdapter.updateUserDiscount(userId, val);
-            // Actualizar estado local
+            // Actualización optimista del estado local para feedback inmediato
             setUsers(prev => prev.map(u => u.id === userId ? { ...u, discount_percent: val } : u));
         } catch {
-            alert("Error al actualizar descuento");
+            alert("Error al actualizar el descuento del usuario");
         }
     };
 
+    /**
+     * Genera y descarga el Albarán de entrega para un pedido individual.
+     */
     const handleDownloadPDF = async (order) => {
         try {
             const profile = await DbAdapter.getUserById(order.userId);
             await AdminService.generateDeliveryNote(order, profile || { full_name: order.userId, email: order.userId });
         } catch (error) {
-            alert(`Error: ${error.message}`);
+            alert(`Error al generar PDF: ${error.message}`);
         }
     };
 
+    /**
+     * Elimina permanentemente un pedido del sistema.
+     */
     const handleDeleteOrder = async (orderId) => {
-        // Removed confirmation per user request
         try {
             await DbAdapter.deleteOrder(orderId);
             setOrders(prev => prev.filter(o => o.id !== orderId));
-            // Trigger load to refresh stats/inventory if needed, but local state update is faster
         } catch (error) {
-            alert('Error al eliminar pedido: ' + error.message);
+            alert('Error al eliminar el pedido: ' + error.message);
         }
     };
 
-    // Bulk selection
+    // --- ACCIONES EN LOTE (BULK ACTIONS) ---
+
+    /**
+     * Marca o desmarca un pedido para la descarga masiva.
+     */
     const toggleSelectOrder = (orderId) => {
         const newSet = new Set(selectedOrders);
         if (newSet.has(orderId)) newSet.delete(orderId);
@@ -204,13 +235,19 @@ export function AdminDashboard() {
         setSelectedOrders(newSet);
     };
 
+    /**
+     * Genera un único PDF con todos los albaranes de los pedidos seleccionados.
+     */
     const handleBulkDownload = async () => {
         if (selectedOrders.size === 0) return;
         const ordersToPrint = orders.filter(o => selectedOrders.has(o.id));
         await AdminService.generateBulkDeliveryNotes(ordersToPrint);
-        setSelectedOrders(new Set()); // Clear selection
+        setSelectedOrders(new Set()); // Limpiamos la selección tras imprimir
     };
 
+    /**
+     * Selecciona o deselecciona todos los pedidos visibles (según filtros).
+     */
     const toggleSelectAll = () => {
         if (selectedOrders.size === filteredOrders.length) {
             setSelectedOrders(new Set());
@@ -219,37 +256,40 @@ export function AdminDashboard() {
         }
     };
 
-    // --- LOGIC: INVENTORY ---
+    // --- LÓGICA: INVENTARIO ---
 
+    /**
+     * Ajusta manualmente el stock de un producto (entrada o salida de mercancía).
+     */
     const handleStockUpdate = async (productId, delta) => {
         try {
             await DbAdapter.updateStock(productId, delta);
-            // Manually update local state to avoid full reload jumpiness, but keep sort
+            // Actualizamos localmente para evitar el parpadeo de una recarga completa
             setInventory(prev => {
                 const map = prev.map(item => item.product_id === productId
                     ? { ...item, stock_quantity: item.stock_quantity + delta }
                     : item
                 );
-                return map; // Order is preserved as map doesn't reorder
+                return map;
             });
         } catch {
-            alert('Error al actualizar stock');
+            alert('Error al actualizar el stock');
         }
     };
 
-    // --- LOGIC: STATS ---
+    // --- CÁLCULO DE ESTADÍSTICAS Y KPI ---
     const stats = useMemo(() => {
         const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
         const totalOrders = orders.length;
 
-        // Sales by Month (Simple Object)
+        // Ventas agrupadas por mes para el gráfico
         const salesByMonth = {};
         orders.forEach(o => {
             const month = new Date(o.createdAt).toLocaleString('default', { month: 'short' });
             salesByMonth[month] = (salesByMonth[month] || 0) + o.total;
         });
 
-        // Top Products
+        // Conteo de items vendidos para saber los productos estrella
         const productCounts = {};
         orders.forEach(o => {
             o.items.forEach(i => {
@@ -257,40 +297,20 @@ export function AdminDashboard() {
             });
         });
 
-        // Top Towns (Naive parsing)
-        const townCounts = {};
-        users.forEach(u => {
-            if (u.address) {
-                // Heuristic: Last part of address usually contains town or zip
-                // For demo, we just group by non-empty address existence or specific keywords if found
-                const addressLower = u.address.toLowerCase();
-                let town = 'Desconocido';
-                if (addressLower.includes('illescas')) town = 'Illescas';
-                else if (addressLower.includes('ugena')) town = 'Ugena';
-                else if (addressLower.includes('madrid')) town = 'Madrid';
-                else town = 'Otros';
-
-                townCounts[town] = (townCounts[town] || 0) + 1;
-            }
-        });
-
-        // REAL HEATMAP BASED ON ORDERS (Shipping Address)
-        // Overwrite townCounts with Order Shipping Data if available
-        // Reset townCounts for Order based calculation
+        // MAPA DE CALOR: Distribución geográfica de los pedidos
         const orderTownCounts = {};
         orders.forEach(o => {
-            // HEATMAP DATA (Refined with Shipping Town)
             if (o.shippingTown) {
-                // If we have explicit shipping town, use it
+                // Si el pedido tiene localidad explícita (versiones nuevas)
                 const town = o.shippingTown;
                 orderTownCounts[town] = (orderTownCounts[town] || 0) + 1;
             } else {
-                // Fallback to User Address (Legacy orders)
+                // Heurística de respaldo para pedidos antiguos basada en la dirección del perfil
                 const user = users.find(u => u.id === o.userId || u.email === o.userId);
                 if (user && user.address) {
                     const addressLower = user.address.toLowerCase();
                     let town = 'Desconocido';
-                    // ... (existing helper logic) - Optimization: Extract normalized logic if needed
+                    // Clasificación por palabras clave en la dirección
                     if (addressLower.includes('illescas')) town = 'Illescas';
                     else if (addressLower.includes('ugena')) town = 'Ugena';
                     else if (addressLower.includes('yuncos')) town = 'Yuncos';
@@ -312,12 +332,7 @@ export function AdminDashboard() {
             }
         });
 
-        // console.log("Heatmap Data:", orderTownCounts); // Removed log
-
-        // Use orderTownCounts instead of townCounts if we have orders
-        const finalTownCounts = Object.keys(orderTownCounts).length > 0 ? orderTownCounts : townCounts;
-
-        return { totalRevenue, totalOrders, salesByMonth, productCounts, townCounts: finalTownCounts };
+        return { totalRevenue, totalOrders, salesByMonth, productCounts, townCounts: orderTownCounts };
     }, [orders, users]);
 
 
@@ -328,6 +343,7 @@ export function AdminDashboard() {
 
     const pendingCount = orders.filter(o => o.status === 'pending').length;
     const lowStockCount = inventory.filter(i => i.stock_quantity < 10).length;
+    const confirmedOrders = orders.filter(o => o.status === 'confirmed'); // NEW: Filter confirmed orders for the map
 
     return (
         <div className="container" style={{ paddingBottom: '5rem' }}>
@@ -341,7 +357,7 @@ export function AdminDashboard() {
             <style>{`
                 .order-grid-header {
                     display: grid;
-                    grid-template-columns: 40px 1fr 1fr 2fr 1fr 150px 50px;
+                    grid-template-columns: 40px 1fr 1fr 2fr 2fr 150px 50px;
                     gap: 1rem;
                     padding: 0 1rem;
                     font-size: 0.8rem;
@@ -351,7 +367,7 @@ export function AdminDashboard() {
                 }
                 .order-grid-item {
                     display: grid;
-                    grid-template-columns: 40px 1fr 1fr 2fr 1fr 150px 50px;
+                    grid-template-columns: 40px 1fr 1fr 2fr 2fr 150px 50px;
                     align-items: center;
                     gap: 1rem;
                 }
@@ -364,6 +380,7 @@ export function AdminDashboard() {
                     .order-grid-item > input { display: none; } /* Hide checkbox on mobile for simplicity or move it */
                 }
             `}</style>
+            {/* ENCABEZADO DEL PANEL */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
                 <Package size={40} className="text-gold" />
                 <div>
@@ -372,10 +389,11 @@ export function AdminDashboard() {
                 </div>
             </div>
 
-            {/* TABS */}
+            {/* PESTAÑAS DE NAVEGACIÓN (TABS) */}
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '1rem', overflowX: 'auto' }}>
                 {[
                     { id: 'orders', icon: Truck, label: `Pedidos`, badge: pendingCount },
+                    { id: 'routes', icon: MapTrifold, label: `Ruta Reparto`, badge: confirmedOrders.length }, // NEW: Routes tab
                     { id: 'inventory', icon: Storefront, label: 'Inventario', badge: lowStockCount },
                     { id: 'stats', icon: ChartBar, label: 'Estadísticas' },
                     { id: 'users', icon: User, label: `Usuarios (${users.length})` },
@@ -394,6 +412,7 @@ export function AdminDashboard() {
                         }}
                     >
                         <tab.icon size={20} /> {tab.label}
+                        {/* Indicador visual de pedidos pendientes o poco stock */}
                         {tab.badge > 0 && (
                             <span style={{
                                 background: '#ef4444',
@@ -410,25 +429,30 @@ export function AdminDashboard() {
                 ))}
             </div>
 
+            {/* --- TAB: RUTAS DEL REPARTO --- */}
+            {activeTab === 'routes' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', animation: 'fadeIn 0.3s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div>
+                            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <MapTrifold size={28} color="var(--color-accent-primary)" />
+                                Mapa de Rutas
+                            </h2>
+                            <p style={{ color: 'var(--color-text-secondary)', margin: '0.5rem 0 0' }}>Visualiza todos los pedidos con estado <strong style={{ color: '#3b82f6' }}>Confirmado</strong>.</p>
+                        </div>
+                    </div>
+
+                    <DeliveryRouteMap orders={confirmedOrders} users={users} onUpdateStatus={handleStatusUpdate} />
+                </div>
+            )}
+
             {/* --- TAB: ORDERS --- */}
             {activeTab === 'orders' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    {/* Header Columns for List */}
-                    <div className="order-grid-header">
-                        <div></div>
-                        <div>Nº PEDIDO</div>
-                        <div>FECHA</div>
-                        <div>CLIENTE / EMAIL</div>
-                        <div>LOCALIDAD</div>
-                        <div style={{ textAlign: 'center' }}>ESTADO</div>
-                        <div></div>
-                    </div>
-
-
-                    {/* Filters & Actions */}
-                    <div className="glass-card" style={{ padding: '1rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-                            <MagnifyingGlass size={20} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
+                    {/* Filtros y Acciones (Ahora situados encima de las cabeceras para mejor usabilidad) */}
+                    <div className="glass-card" style={{ padding: '0.75rem 1rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'nowrap', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
+                        <div style={{ position: 'relative', flex: 1, minWidth: '250px' }}>
+                            <MagnifyingGlass size={20} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-primary)' }} />
                             <input
                                 type="text"
                                 name="searchOrders"
@@ -437,18 +461,18 @@ export function AdminDashboard() {
                                 placeholder="Buscar por cliente o factura..."
                                 value={filterText}
                                 onChange={(e) => setFilterText(e.target.value)}
-                                style={{ width: '100%', paddingLeft: '2.5rem', background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)' }}
+                                style={{ width: '100%', padding: '0.6rem 1rem 0.6rem 2.5rem', background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)', borderRadius: '6px', color: 'var(--color-text-primary)', outline: 'none' }}
                             />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Funnel size={20} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 'max-content' }}>
+                            <Funnel size={20} color="var(--color-text-primary)" />
                             <select
                                 name="statusFilter"
                                 id="statusFilter"
                                 aria-label="Filtrar por estado"
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                style={{ background: 'var(--color-bg-primary)', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--color-border)', color: 'white' }}
+                                style={{ background: 'var(--color-bg-primary)', padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', outline: 'none' }}
                             >
                                 <option value="all">Todos los estados</option>
                                 <option value="pending">Pendientes</option>
@@ -460,23 +484,35 @@ export function AdminDashboard() {
                             <button
                                 onClick={handleBulkDownload}
                                 className="btn-primary"
-                                style={{ background: '#3b82f6', display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+                                style={{ background: '#3b82f6', display: 'flex', gap: '0.5rem', alignItems: 'center', minWidth: 'max-content', padding: '0.6rem 1rem' }}
                             >
-                                <DownloadSimple size={20} /> Descargar Seleccionados ({selectedOrders.size})
+                                <DownloadSimple size={20} /> Descargar PDF ({selectedOrders.size})
                             </button>
                         )}
-                        <div style={{ marginLeft: 'auto' }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <div style={{ marginLeft: 'auto', minWidth: 'max-content' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600, color: 'var(--color-text-primary)' }}>
                                 <input
                                     type="checkbox"
                                     name="selectAllOrders"
                                     id="selectAllOrders"
                                     checked={selectedOrders.size === filteredOrders.length && filteredOrders.length > 0}
                                     onChange={toggleSelectAll}
+                                    style={{ transform: 'scale(1.2)' }}
                                 />
                                 Seleccionar Todo
                             </label>
                         </div>
+                    </div>
+
+                    {/* Cabeceras de la Lista de Pedidos */}
+                    <div className="order-grid-header">
+                        <div></div>
+                        <div>Nº PEDIDO</div>
+                        <div>FECHA</div>
+                        <div>CLIENTE / EMAIL</div>
+                        <div>DIRECCIÓN DE ENTREGA</div>
+                        <div style={{ textAlign: 'center' }}>ESTADO</div>
+                        <div></div>
                     </div>
 
                     {filteredOrders.length === 0 && <p style={{ textAlign: 'center', padding: '3rem', color: 'var(--color-text-secondary)' }}>No hay pedidos que coincidan.</p>}
@@ -493,7 +529,7 @@ export function AdminDashboard() {
                                     onChange={() => toggleSelectOrder(order.id)}
                                     style={{ transform: 'scale(1.2)' }}
                                 />
-                                {/* Column 1: Invoice */}
+                                {/* Columna 1: Factura / Pedido */}
                                 <div style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }} onClick={() => setExpandedOrder(expandedOrder === order.id ? null : order.id)}>
                                     {expandedOrder === order.id ? <CaretDown /> : <CaretRight />}
                                     <span style={{ fontWeight: 600, color: 'var(--color-accent-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -506,39 +542,41 @@ export function AdminDashboard() {
                                     </span>
                                 </div>
 
-                                {/* Column 2: Date */}
+                                {/* Columna 2: Fecha */}
                                 <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
                                     {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </div>
 
-                                {/* Column 3: User/Email */}
+                                {/* Columna 3: Usuario/Email */}
                                 <div style={{ fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={order.userId}>
-                                    {order.userId}
-                                </div>
-
-                                {/* Column 4: Locality (Explicit or Derived) */}
-                                <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
-                                    {order.shippingTown || (() => {
+                                    {(() => {
                                         const u = users.find(user => user.id === order.userId || user.email === order.userId);
-                                        if (!u || !u.address) return '-';
-                                        const addr = u.address.toLowerCase();
-                                        if (addr.includes('illescas')) return 'Illescas';
-                                        if (addr.includes('ugena')) return 'Ugena';
-                                        if (addr.includes('yuncos')) return 'Yuncos';
-                                        if (addr.includes('seseña')) return 'Seseña';
-                                        if (addr.includes('esquivias')) return 'Esquivias';
-                                        if (addr.includes('yeles')) return 'Yeles';
-                                        if (addr.includes('numancia')) return 'Numancia';
-                                        if (addr.includes('cedillo')) return 'Cedillo';
-                                        if (addr.includes('viso')) return 'El Viso';
-                                        if (addr.includes('carranque')) return 'Carranque';
-                                        if (addr.includes('casarrubuelos')) return 'Casarrubuelos';
-                                        if (addr.includes('madrid')) return 'Madrid';
-                                        return 'Otro';
+                                        if (u) {
+                                            return `${u.full_name || ''} ${u.email ? `(${u.email})` : ''}`.trim();
+                                        }
+                                        return order.userId;
                                     })()}
                                 </div>
 
-                                {/* Status */}
+                                {/* Columna 4: Dirección de Entrega */}
+                                <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                    {order.shippingAddress ? (
+                                        <>
+                                            <div style={{ color: 'var(--color-text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={`${order.shippingAddress} ${order.shippingAddress2 || ''}`}>
+                                                {order.shippingAddress} {order.shippingAddress2 ? `(${order.shippingAddress2})` : ''}
+                                            </div>
+                                            <div style={{ fontSize: '0.8rem' }}>
+                                                {order.shippingTown || ''} {order.shippingPostalCode || ''}
+                                            </div>
+                                        </>
+                                    ) : (() => {
+                                        const u = users.find(user => user.id === order.userId || user.email === order.userId);
+                                        if (!u || !u.address) return '-';
+                                        return <span title={u.address} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{u.address}</span>;
+                                    })()}
+                                </div>
+
+                                {/* Estado del pedido */}
                                 <span style={{
                                     padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: 'bold', textAlign: 'center',
                                     background: order.status === 'pending' ? 'rgba(249, 115, 22, 0.2)' :
@@ -554,14 +592,14 @@ export function AdminDashboard() {
                                                 order.status}
                                 </span>
 
-                                {/* Actions */}
+                                {/* Acciones (PDF, Eliminar) */}
                                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                     <button onClick={() => handleDownloadPDF(order)} style={{ background: 'transparent', color: '#3b82f6' }} title="Albarán PDF"><FilePdf size={24} /></button>
                                     <button onClick={() => handleDeleteOrder(order.id)} style={{ background: 'transparent', color: '#ef4444' }} title="Eliminar"><Trash size={24} /></button>
                                 </div>
                             </div>
 
-                            {/* Expanded Details */}
+                            {/* Detalles Expandidos (Productos) */}
                             {expandedOrder === order.id && (
                                 <div style={{ marginLeft: '2.5rem', marginTop: '1rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
                                     <div style={{ marginBottom: '0.5rem', fontWeight: 'bold' }}>Items:</div>
@@ -574,7 +612,7 @@ export function AdminDashboard() {
                                             </div>
                                         );
                                     })}
-                                    <div style={{ marginTop: '0.5rem', textAlign: 'right', fontWeight: 'bold', color: 'var(--color-accent-primary)' }}>
+                                    <div style={{ marginTop: '0.5rem', textAlign: 'right', fontWeight: 'bold', fontSize: '1.1rem', color: 'var(--color-text-primary)' }}>
                                         Total: {order.total.toFixed(2)} €
                                     </div>
                                     <div style={{ marginTop: '0.25rem', textAlign: 'right', fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>
@@ -598,7 +636,7 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {/* --- TAB: INVENTORY --- */}
+            {/* --- PESTAÑA: INVENTARIO --- */}
             {activeTab === 'inventory' && (
                 <div className="glass-card">
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -641,10 +679,10 @@ export function AdminDashboard() {
                 </div>
             )}
 
-            {/* --- TAB: STATS --- */}
+            {/* --- PESTAÑA: ESTADÍSTICAS --- */}
             {activeTab === 'stats' && (
                 <div style={{ display: 'grid', gap: '2rem' }}>
-                    {/* KPIs */}
+                    {/* Indicadores Clave de Rendimiento (KPIs) */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
                         <div className="glass-card" style={{ padding: '1.5rem', textAlign: 'center' }}>
                             <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--color-accent-primary)' }}>{stats.totalRevenue.toFixed(0)} €</div>
@@ -661,7 +699,7 @@ export function AdminDashboard() {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
-                        {/* Sales Chart */}
+                        {/* Gráfico de Ventas */}
                         <div className="glass-card" style={{ padding: '1.5rem' }}>
                             <h3>Ventas Mensuales</h3>
                             <div style={{ display: 'flex', alignItems: 'flex-end', height: '200px', gap: '1rem', paddingTop: '1rem' }}>
@@ -688,7 +726,7 @@ export function AdminDashboard() {
                             </div>
                         </div>
 
-                        {/* Top Products */}
+                        {/* Top Productos Vendidos */}
                         <div className="glass-card" style={{ padding: '1.5rem' }}>
                             <h3>Top Productos</h3>
                             {Object.entries(stats.productCounts).map(([pid, count]) => {
@@ -707,7 +745,7 @@ export function AdminDashboard() {
                             })}
                         </div>
 
-                        {/* Heatmap (Top Cities) */}
+                        {/* Mapa de Calor (Top Ciudades) */}
                         <div className="glass-card" style={{ padding: '1.5rem' }}>
                             <h3>Mapa de Calor (Ciudades)</h3>
                             <p style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>Lugares con mayor volumen de pedidos</p>
@@ -736,7 +774,7 @@ export function AdminDashboard() {
             )
             }
 
-            {/* --- TAB: USERS --- */}
+            {/* --- PESTAÑA: USUARIOS --- */}
             {
                 activeTab === 'users' && (
                     <div className="glass-card">

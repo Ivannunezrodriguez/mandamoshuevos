@@ -1,40 +1,69 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { OrderService, PRODUCTS, LOGISTICS_INFO, ALL_TOWNS, getDeliveryDaysForTown } from '../services/order.service';
+import { OrderService } from '../services/order.service';
+import { PRODUCTS, LOGISTICS_INFO, ALL_TOWNS, getDeliveryDaysForTown } from '../services/catalog.service';
 import { AuthService } from '../services/auth.service';
 import { DbAdapter } from '../services/db.adapter';
-import { ShoppingCart, CalendarCheck, ArrowRight, CreditCard, Bank, Truck, MapPin, Money } from 'phosphor-react';
+import { ShoppingCart, CalendarCheck, ArrowRight, CreditCard, Bank, Truck, MapPin, Money, MapTrifold } from 'phosphor-react';
+import { AddressAutocomplete } from '../components/AddressAutocomplete';
 
+/**
+ * Componente NewOrder
+ * 
+ * Gestiona el proceso de compra de principio a fin.
+ * Flujo de trabajo:
+ * 1. Selección de productos y cantidades.
+ * 2. Visualización del carrito con descuentos dinámicos según el perfil del usuario.
+ * 3. Selección de logística (Localidad -> Fechas disponibles).
+ * 4. Pasarela de confirmación y creación del pedido en Supabase/LocalStorage.
+ */
 export function NewOrder() {
     const navigate = useNavigate();
-    const location = useLocation(); // Para recuperar el estado de "Repetir Pedido"
-    const [cart, setCart] = useState({});
-    const [isRecurringOrder, setIsRecurringOrder] = useState(false); // NEW: Recurrence Flag
-    const [step, setStep] = useState(1); // 1: Selección, 2: Confirmación
-    const [selectedTown, setSelectedTown] = useState('');
-    const [deliveryAddress, setDeliveryAddress] = useState(''); // New state for street address
-    const [deliveryDate, setDeliveryDate] = useState('');
-    const [availableDates, setAvailableDates] = useState([]);
-    const [paymentMethod, setPaymentMethod] = useState('transfer'); // 'transfer' | 'bizum'
-    const [discountPercent, setDiscountPercent] = useState(0);
+    const location = useLocation(); // Permite recibir datos de "Repetir Pedido" desde el Historial
 
+    // --- ESTADO DEL CARRITO Y PEDIDO ---
+    const [cart, setCart] = useState({}); // Estructura: { productId: quantity }
+    const [isRecurringOrder, setIsRecurringOrder] = useState(false); // Marca si el usuario desea repetir este pedido semanalmente
+    const [step, setStep] = useState(1); // Control de pasos: 1 (Selección), 2 (Checkout/Logística)
+
+    // --- ESTADO DE LOGÍSTICA ---
+    const [selectedTown, setSelectedTown] = useState('');     // Localidad elegida por el usuario
+    const [deliveryAddress, setDeliveryAddress] = useState(''); // Dirección exacta (Calle, Nº, etc.)
+    const [deliveryAddress2, setDeliveryAddress2] = useState(''); // Piso, nave, etc.
+    const [deliveryPostalCode, setDeliveryPostalCode] = useState(''); // Código postal
+    const [deliveryDate, setDeliveryDate] = useState('');       // Fecha elegida para el reparto
+    const [availableDates, setAvailableDates] = useState([]);   // Fechas calculadas según la zona del usuario
+
+    // --- ESTADO DE PAGO Y DESCUENTOS ---
+    const [paymentMethod, setPaymentMethod] = useState('transfer'); // Métodos: transfer (Transferencia), bizum, cash (Metalico)
+    const [discountPercent, setDiscountPercent] = useState(0);      // Porcentaje de descuento heredado del perfil
+
+    /**
+     * EFECTO: Carga inicial del perfil del cliente.
+     * Busca si el usuario tiene un descuento especial asignado y autocompleta 
+     * la población si ya está en sus datos de perfil.
+     */
     useEffect(() => {
         const fetchProfile = async () => {
             const user = AuthService.getCurrentUser();
             if (user) {
                 try {
-                    // Cargar perfil completo para ver descuento
-                    const profile = await import('../services/db.adapter').then(m => m.DbAdapter.getUserById(user.id || user.email));
-                    if (profile && profile.discount_percent) {
-                        setDiscountPercent(profile.discount_percent);
+                    // Consultamos el perfil completo al adaptador para obtener el campo 'discount_percent'
+                    const profile = await DbAdapter.getUserById(user.id);
+                    if (profile) {
+                        if (profile.discount_percent) setDiscountPercent(profile.discount_percent);
+                        if (profile.address) setDeliveryAddress(profile.address);
+                        if (profile.address_2) setDeliveryAddress2(profile.address_2);
+                        if (profile.town) setSelectedTown(profile.town);
+                        if (profile.postal_code) setDeliveryPostalCode(profile.postal_code);
                     }
                 } catch (e) {
-                    console.error("Error cargando perfil para descuento", e);
+                    console.error("No se pudo cargar el descuento del perfil:", e);
                 }
             }
 
-            // Intentar autoseleccionar población si coincide con alguna zona
+            // Heurística de autocompletado: Si la dirección guardada contiene una poblacion conocida, la seleccionamos
             if (user && user.address) {
                 const foundTown = ALL_TOWNS.find(t => user.address.toLowerCase().includes(t.toLowerCase()));
                 if (foundTown) setSelectedTown(foundTown);
@@ -43,13 +72,16 @@ export function NewOrder() {
         fetchProfile();
     }, []);
 
+    /**
+     * EFECTO: Gestión de la repetición de pedidos.
+     * Cuando pulsamos "Repetir" en el historial, recibimos los productos por el estado de navegación.
+     */
     useEffect(() => {
-        // Cargar carrito inicial si venimos de "Repetir Pedido"
         if (location.state) {
             if (location.state.initialCart) {
                 const initialCart = {};
                 location.state.initialCart.forEach(item => {
-                    // Verificar que el producto aún existe en el catálogo actual
+                    // Verificamos que el producto aún exista en el catálogo (por si ha cambiado el ID)
                     if (PRODUCTS.find(p => p.id === item.id)) {
                         initialCart[item.id] = item.quantity;
                     }
@@ -62,6 +94,10 @@ export function NewOrder() {
         }
     }, [location.state]);
 
+    /**
+     * Aumenta o disminuye la cantidad de un producto en la cesta.
+     * Si la cantidad es 0 o menor, el producto se elimina de la cesta.
+     */
     const updateQuantity = (productId, delta) => {
         setCart(prev => {
             const newQuantity = (prev[productId] || 0) + delta;
@@ -74,6 +110,27 @@ export function NewOrder() {
         });
     };
 
+    const handleAddressSelect = (addressObj) => {
+        if (addressObj) {
+            setDeliveryAddress(`${addressObj.street} ${addressObj.houseNumber}`.trim());
+
+            // Intentar que la ciudad devuelta coincida con nuestra lista de pueblos (case insensitive)
+            const cityStr = (addressObj.city || '').toLowerCase();
+            const stateStr = (addressObj.state || '').toLowerCase();
+            const matchedTown = ALL_TOWNS.find(t => t.toLowerCase() === cityStr || t.toLowerCase() === stateStr) || addressObj.city || '';
+
+            setSelectedTown(matchedTown);
+            setDeliveryPostalCode(addressObj.postcode || '');
+        } else {
+            setDeliveryAddress('');
+            setSelectedTown('');
+            setDeliveryPostalCode('');
+            setDeliveryDate(''); // Resetear fecha
+        }
+    };
+
+    // --- FUNCIONES DE CÁLCULO ECONÓMICO ---
+
     const calculateSubtotal = () => {
         return Object.entries(cart).reduce((total, [productId, quantity]) => {
             const product = PRODUCTS.find(p => p.id === productId);
@@ -84,6 +141,7 @@ export function NewOrder() {
     const calculateTotal = () => {
         const subtotal = calculateSubtotal();
         if (discountPercent > 0) {
+            // Aplicamos el descuento solo si el usuario lo tiene habilitado en el admin
             return subtotal * ((100 - discountPercent) / 100);
         }
         return subtotal;
@@ -96,20 +154,6 @@ export function NewOrder() {
         }, 0);
     };
 
-    useEffect(() => {
-        // Cargar carrito inicial si venimos de "Repetir Pedido"
-        if (location.state && location.state.initialCart) {
-            const initialCart = {};
-            location.state.initialCart.forEach(item => {
-                // Verificar que el producto aún existe en el catálogo actual
-                if (PRODUCTS.find(p => p.id === item.id)) {
-                    initialCart[item.id] = item.quantity;
-                }
-            });
-            setCart(initialCart);
-        }
-    }, [location.state]);
-
 
 
     const resetCart = () => {
@@ -118,6 +162,11 @@ export function NewOrder() {
         setCart({});
     };
 
+    /**
+     * EFECTO: Cálculo de fechas de reparto.
+     * Basado en la localidad seleccionada, determina los días de la semana en los que 
+     * repartimos (ej: Lunes y Miércoles) y calcula las próximas 4 fechas de calendario.
+     */
     useEffect(() => {
         if (!selectedTown) {
             setAvailableDates([]);
@@ -125,24 +174,34 @@ export function NewOrder() {
             return;
         }
 
-        const days = getDeliveryDaysForTown(selectedTown);
+        const days = getDeliveryDaysForTown(selectedTown); // Obtiene [1, 3] para Lunes-Miércoles
         const nextDates = [];
-        let date = new Date();
-        date.setHours(0, 0, 0, 0);
 
-        // Buscar las próximas 4 fechas válidas
-        while (nextDates.length < 4) {
-            date.setDate(date.getDate() + 1); // Empezar desde mañana
-            if (days.includes(date.getDay())) {
-                nextDates.push(new Date(date));
+        if (days && days.length > 0) {
+            let date = new Date();
+            date.setHours(0, 0, 0, 0);
+
+            // Algoritmo de búsqueda: Exploramos los días futuros hasta encontrar 4 que coincidan con el calendario de reparto
+            while (nextDates.length < 4) {
+                date.setDate(date.getDate() + 1); // Siempre empezamos el reparto a partir de mañana
+                if (days.includes(date.getDay())) {
+                    nextDates.push(new Date(date));
+                }
             }
         }
+
         setAvailableDates(nextDates);
-        setDeliveryDate(''); // Resetear fecha elegida al cambiar de pueblo
+        setDeliveryDate(''); // Reseteamos la fecha elegida si el usuario cambia de localidad
     }, [selectedTown]);
 
+    /**
+     * Procesa el checkout final.
+     * 1. Valida que todos los campos requeridos estén rellenos.
+     * 2. Estructura el objeto de pedido con el ID (UUID) del usuario.
+     * 3. Persiste el pedido y redirige al historial.
+     */
     const handleCheckout = async () => {
-        // VALIDACIÓN DE POBLACIÓN Y FECHA
+        // --- VALIDACIONES DE FORMULARIO ---
         if (!selectedTown) {
             alert('Por favor, selecciona tu población para ver los días de reparto.');
             return;
@@ -158,6 +217,7 @@ export function NewOrder() {
 
         try {
             const user = AuthService.getCurrentUser();
+            // Mapeamos el carrito a una lista legible para el administrador
             const orderItems = Object.entries(cart).map(([id, quantity]) => {
                 const product = PRODUCTS.find(p => p.id === id);
                 return {
@@ -168,35 +228,47 @@ export function NewOrder() {
                 };
             });
 
-            // REMOVED AUTO-UPDATE USER ADDRESS - SEPARATING CONCERNS AS REQUESTED
-
+            /**
+             * Objeto OrderData
+              * @important userId: DEBE ser user.id (UUID) para cumplir con las políticas RLS y FK de Supabase.
+             */
             const orderData = {
-                userId: user.id || user.email || user.username,
+                userId: user.id,
                 items: orderItems,
                 deliveryDate: deliveryDate,
                 total: calculateTotal(),
                 paymentMethod: paymentMethod,
                 shippingAddress: deliveryAddress,
+                shippingAddress2: deliveryAddress2,
                 shippingTown: selectedTown,
+                shippingPostalCode: deliveryPostalCode,
+                // Generamos un número de factura único basado en la fecha
                 invoiceNumber: `INV-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`,
-                isRecurring: isRecurringOrder // NEW: Send flag to DB
+                isRecurring: isRecurringOrder // Flag de suscripción
             };
 
-            await OrderService.createOrder(orderData);
+            const order = await OrderService.createOrder(orderData);
 
-            // FIX: Usar replace: true para evitar bucles de historial y navegación limpia
-            navigate('/history', { replace: true });
+            if (paymentMethod === 'bizum') {
+                // Si es Bizum, redirigimos a la página de instrucciones pasando la info del pedido
+                navigate('/bizum-payment', { state: { order: order }, replace: true });
+            } else {
+                // Redirigimos al historial para otros métodos
+                navigate('/history', { replace: true });
+            }
         } catch (error) {
-            console.error('Error creating order:', error);
-            alert('Hubo un error al procesar el pedido');
+            console.error('Error crítico al procesar el pedido:', error);
+            alert('Hubo un error al procesar el pedido. Comprueba tu conexión.');
         }
     };
 
     if (step === 2) {
+        // --- VISTA DE CHECKOUT (PASO 2) ---
         return (
             <div className="glass-card" style={{ maxWidth: '600px', margin: '0 auto' }}>
                 <h2 style={{ marginBottom: '2rem' }}>Resumen del Pedido</h2>
 
+                {/* LISTA DE PRODUCTOS SELECCIONADOS */}
                 <div style={{ marginBottom: '2rem' }}>
                     {Object.entries(cart).map(([id, quantity]) => {
                         const product = PRODUCTS.find(p => p.id === id);
@@ -207,6 +279,8 @@ export function NewOrder() {
                             </div>
                         );
                     })}
+
+                    {/* DESGLOSE DE PRECIOS */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem', fontSize: '1.2rem', color: 'var(--color-text-secondary)' }}>
                         <span>Subtotal</span>
                         <span>{calculateSubtotal().toFixed(2)} €</span>
@@ -226,37 +300,63 @@ export function NewOrder() {
                     </div>
                 </div>
 
+                {/* FORMULARIO DE REPARTO */}
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label htmlFor="delivery-town" style={{ display: 'block', marginBottom: '0.5rem' }}>Población de Entrega <span style={{ color: 'var(--color-error)' }}>*</span></label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !selectedTown ? '1px solid var(--color-error)' : '1px solid transparent' }}>
-                        <MapPin size={24} color="var(--color-text-primary)" />
-                        <select
-                            id="delivery-town"
-                            name="delivery-town"
-                            value={selectedTown}
-                            onChange={(e) => setSelectedTown(e.target.value)}
-                            style={{ background: 'transparent', border: 'none', color: 'var(--color-text-primary)', width: '100%', outline: 'none', cursor: 'pointer', padding: '0.25rem' }}
-                        >
-                            <option value="" style={{ background: 'var(--color-bg-secondary)' }}>-- Selecciona tu población --</option>
-                            {ALL_TOWNS.map(town => (
-                                <option key={town} value={town} style={{ background: 'var(--color-bg-secondary)' }}>{town}</option>
-                            ))}
-                        </select>
-                    </div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                        <MapTrifold size={16} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                        Dirección de Entrega Principal <span style={{ color: 'var(--color-error)' }}>*</span>
+                    </label>
+                    <AddressAutocomplete
+                        initialValue={deliveryAddress}
+                        onSelect={handleAddressSelect}
+                        required={true}
+                    />
+                    <small style={{ color: 'var(--color-text-secondary)', display: 'block', marginTop: '0.25rem' }}>Buscador obligatorio. Nos aseguramos de que los repartidores puedan llegar sin problemas.</small>
                 </div>
 
                 <div style={{ marginBottom: '1.5rem' }}>
-                    <label htmlFor="delivery-address" style={{ display: 'block', marginBottom: '0.5rem' }}>Dirección de Entrega (Calle y Nº) <span style={{ color: 'var(--color-error)' }}>*</span></label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !deliveryAddress ? '1px solid var(--color-error)' : '1px solid transparent' }}>
+                    <label htmlFor="delivery-address-2" style={{ display: 'block', marginBottom: '0.5rem' }}>Detalles Adicionales (Línea 2 - Opcional)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
                         <input
                             type="text"
-                            id="delivery-address"
-                            name="delivery-address"
-                            placeholder="Ej: Calle Gran Via 12, 3ºA"
-                            value={deliveryAddress}
-                            onChange={(e) => setDeliveryAddress(e.target.value)}
+                            id="delivery-address-2"
+                            name="delivery-address-2"
+                            placeholder="Ej: Bloque 2, 3ºB, Nave 4..."
+                            value={deliveryAddress2}
+                            onChange={(e) => setDeliveryAddress2(e.target.value)}
                             style={{ background: 'transparent', border: 'none', color: 'var(--color-text-primary)', width: '100%', outline: 'none', padding: '0.25rem' }}
                         />
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div>
+                        <label htmlFor="delivery-town" style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--color-text-secondary)' }}>Población (Auto) <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.1)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !selectedTown ? '1px solid var(--color-error)' : '1px solid transparent' }}>
+                            <MapPin size={24} color="var(--color-text-secondary)" />
+                            <input
+                                type="text"
+                                id="delivery-town"
+                                value={selectedTown}
+                                readOnly
+                                placeholder="Esperando dirección..."
+                                style={{ background: 'transparent', border: 'none', color: 'var(--color-text-secondary)', width: '100%', outline: 'none', padding: '0.25rem', cursor: 'not-allowed' }}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label htmlFor="delivery-pc" style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--color-text-secondary)' }}>Código Postal (Auto) <span style={{ color: 'var(--color-error)' }}>*</span></label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,0,0,0.1)', padding: '0.5rem', borderRadius: 'var(--radius-md)', border: !deliveryPostalCode ? '1px solid var(--color-error)' : '1px solid transparent' }}>
+                            <input
+                                type="text"
+                                id="delivery-pc"
+                                value={deliveryPostalCode}
+                                readOnly
+                                placeholder="Esperando..."
+                                style={{ background: 'transparent', border: 'none', color: 'var(--color-text-secondary)', width: '100%', outline: 'none', padding: '0.25rem', cursor: 'not-allowed' }}
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -291,6 +391,7 @@ export function NewOrder() {
                     {!deliveryDate && selectedTown && <div style={{ color: 'var(--color-error)', fontSize: '0.8rem', marginTop: '0.25rem' }}>Selecciona un día de reparto</div>}
                 </div>
 
+                {/* SELECCIÓN DE MÉTODO DE PAGO */}
                 <div style={{ marginBottom: '1.5rem' }}>
                     <label style={{ display: 'block', marginBottom: '0.5rem' }}>Método de Pago</label>
                     <div style={{ display: 'flex', gap: '1rem' }}>
@@ -340,9 +441,9 @@ export function NewOrder() {
                     </button>
                     <button
                         className="btn-primary"
-                        style={{ flex: 1, justifyContent: 'center', opacity: (!deliveryDate || !deliveryAddress) ? 0.5 : 1, cursor: (!deliveryDate || !deliveryAddress) ? 'not-allowed' : 'pointer' }}
+                        style={{ flex: 1, justifyContent: 'center', opacity: (!deliveryDate || !deliveryAddress || !deliveryPostalCode || !selectedTown) ? 0.5 : 1, cursor: (!deliveryDate || !deliveryAddress || !deliveryPostalCode || !selectedTown) ? 'not-allowed' : 'pointer' }}
                         onClick={handleCheckout}
-                        disabled={!deliveryDate || !deliveryAddress}
+                        disabled={!deliveryDate || !deliveryAddress || !deliveryPostalCode || !selectedTown}
                     >
                         Confirmar Pedido <ArrowRight weight="bold" />
                     </button>
